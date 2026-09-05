@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ncaa-soccer-npi"
+version = "0.1.0"
+description = "A transparent NCAA Division III men's soccer NPI schedule model"
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = ["npi_model"]
+

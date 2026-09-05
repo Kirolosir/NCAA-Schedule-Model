@@ -1,0 +1,132 @@
+{
+  "source": {
+    "workbook": "NCAA Statistics.xlsx",
+    "sha256": "40e308e6526b036cc797557b6e84774e93af5fd7a78373f7e2c8432b41c90a93",
+    "sheet": "Sheet1",
+    "range": "A1:M410",
+    "cutoff": "2024-10-27",
+    "note": "Opponent NPIs and published outputs are displayed to three decimals in the official export. Calculations retain the precision available in this source fixture."
+  },
+  "teams": [
+    {
+      "team": "Mary Washington",
+      "schedule_source": "https://umweagles.com/sports/mens-soccer/stats/2024",
+      "published_npi": 62.061,
+      "diii_record": "15-0-1",
+      "adjusted_wins": 10.0,
+      "adjusted_losses": 0.5,
+      "games": [
+        ["N.C. Wesleyan", 54.243, "win"],
+        ["Rutgers-Newark", 52.573, "win"],
+        ["Bethany (WV)", 44.997, "win"],
+        ["Marymount (VA)", 51.864, "win"],
+        ["Mount Union", 55.928, "win"],
+        ["Rhodes", 55.490, "win"],
+        ["Rowan", 55.525, "win"],
+        ["Colorado Col.", 58.028, "win"],
+        ["Johns Hopkins", 57.375, "tie"],
+        ["Messiah", 54.727, "win"],
+        ["St. Mary's (MD)", 51.682, "win"],
+        ["Salisbury", 52.981, "win"],
+        ["Stevenson", 49.333, "win"],
+        ["Chris. Newport", 54.353, "win"],
+        ["N.C. Wesleyan", 54.243, "win"],
+        ["Salisbury", 52.981, "win"]
+      ]
+    },
+    {
+      "team": "Dickinson",
+      "schedule_source": "https://dickinsonathletics.com/sports/mens-soccer/schedule/2024?grid=true",
+      "published_npi": 57.655,
+      "diii_record": "13-1-3",
+      "adjusted_wins": 10.5,
+      "adjusted_losses": 2.5,
+      "games": [
+        ["Marymount (VA)", 51.864, "win"],
+        ["Shenandoah", 52.954, "win"],
+        ["Salisbury", 52.981, "win"],
+        ["St. Mary's (MD)", 51.682, "win"],
+        ["Messiah", 54.727, "win"],
+        ["Rosemont", 49.383, "win"],
+        ["Goucher", 49.542, "win"],
+        ["Washington Col.", 55.560, "tie"],
+        ["Stevenson", 49.333, "win"],
+        ["Muhlenberg", 55.486, "loss"],
+        ["Gettysburg", 51.761, "win"],
+        ["Haverford", 48.903, "win"],
+        ["McDaniel", 52.800, "win"],
+        ["DeSales", 51.754, "win"],
+        ["Swarthmore", 54.377, "tie"],
+        ["Franklin & Marshall", 56.673, "tie"],
+        ["Ursinus", 51.195, "win"]
+      ]
+    },
+    {
+      "team": "Rutgers-Newark",
+      "schedule_source": "https://njacsports.com/schedule.aspx?schedule=4297",
+      "published_npi": 52.573,
+      "diii_record": "8-6-4",
+      "adjusted_wins": 10.0,
+      "adjusted_losses": 7.0,
+      "games": [
+        ["Randolph-Macon", 52.422, "loss"],
+        ["Mary Washington", 62.061, "loss"],
+        ["Yeshiva", 48.139, "win"],
+        ["Union (NY)", 50.180, "win"],
+        ["Farmingdale St.", 49.145, "win"],
+        ["Eastern", 50.129, "win"],
+        ["Johns Hopkins", 57.375, "loss"],
+        ["Lycoming", 53.023, "loss"],
+        ["Shenandoah", 52.954, "win"],
+        ["Centenary (NJ)", 47.045, "win"],
+        ["Rowan", 55.525, "tie"],
+        ["Rutgers-Camden", 52.397, "tie"],
+        ["Wm. Paterson", 50.634, "win"],
+        ["Montclair St.", 55.550, "loss"],
+        ["Kean", 50.524, "tie"],
+        ["TCNJ", 47.904, "tie"],
+        ["Stockton", 52.881, "loss"],
+        ["New Jersey City", 48.493, "win"]
+      ]
+    },
+    {
+      "team": "Trinity (CT)",
+      "schedule_source": "https://bantamsports.com/sports/mens-soccer/schedule/2024?grid=true",
+      "published_npi": 47.615,
+      "diii_record": "2-12",
+      "adjusted_wins": 2.0,
+      "adjusted_losses": 7.0,
+      "games": [
+        ["Framingham St.", 43.282, "win"],
+        ["Bates", 53.126, "loss"],
+        ["Wesleyan (CT)", 56.047, "loss"],
+        ["Middlebury", 61.618, "loss"],
+        ["Williams", 58.222, "loss"],
+        ["St. John Fisher", 50.839, "win"],
+        ["Hartford", 52.625, "loss"],
+        ["Connecticut Col.", 58.592, "loss"],
+        ["Tufts", 61.778, "loss"],
+        ["Western New Eng.", 51.704, "loss"],
+        ["Bowdoin", 55.022, "loss"],
+        ["Colby", 52.979, "loss"],
+        ["WestConn", 53.761, "loss"],
+        ["Hamilton", 55.523, "loss"]
+      ]
+    },
+    {
+      "team": "Warren Wilson",
+      "schedule_source": "https://warrenwilsonowls.com/sports/mens-soccer/schedule/2024",
+      "published_npi": 39.999,
+      "diii_record": "0-5",
+      "adjusted_wins": 0.0,
+      "adjusted_losses": 0.0,
+      "games": [
+        ["Ferrum", 47.057, "loss"],
+        ["Piedmont", 47.375, "loss"],
+        ["Brevard", 51.984, "loss"],
+        ["Asbury", 49.721, "loss"],
+        ["Methodist", 49.114, "loss"]
+      ]
+    }
+  ]
+}

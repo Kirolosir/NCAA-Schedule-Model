@@ -1,0 +1,10 @@
+{
+  "mode": "bands",
+  "band_scale": "rank",
+  "bands": [
+    {"label": "rank 75-99", "lower": 75, "upper": 100}
+  ],
+  "representatives_per_band": 3,
+  "open_slots": 1,
+  "top_n": 3
+}

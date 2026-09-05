@@ -1,0 +1,15 @@
+{
+  "mode": "teams",
+  "candidates": [
+    {"team": "Babson"},
+    {"team": "Emerson"},
+    {"team": "Manhattanville"},
+    {"team": "Springfield"},
+    {"team": "Suffolk"},
+    {"team": "WPI"},
+    {"team": "Western New Eng."}
+  ],
+  "open_slots": 5,
+  "required": [],
+  "excluded": []
+}
