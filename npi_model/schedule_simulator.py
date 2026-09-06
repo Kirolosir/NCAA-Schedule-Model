@@ -1,9 +1,4 @@
-"""Scenario and probability-based schedule projection.
-
-A proposed target-team schedule is inserted into a background division graph,
-then the entire division is reconverged.  Opponent NPIs are never held fixed.
-No intermediate rounding is performed.
-"""
+"""Scenario and probability-based schedule projection."""
 
 from dataclasses import dataclass
 from itertools import product
@@ -141,13 +136,7 @@ def replace_team_schedule(
     outcomes: Sequence[DivisionResult],
     eligible_teams: Iterable[str],
 ) -> list[DivisionGame]:
-    """Replace all background games involving the target team.
-
-    Removing the old game removes it from both participants because a
-    ``DivisionGame`` is a single shared edge.  Each proposed game is then added
-    once from the target team's perspective; the division iterator supplies
-    the reciprocal result to the opponent.
-    """
+    """Replace all background games involving the target team."""
     eligible = set(eligible_teams)
     schedule = _validate_schedule(
         target_team,
@@ -232,12 +221,7 @@ def project_schedule_scenarios(
     max_iterations: int = 10_000,
     minimum_retained_wins: float = MINIMUM_RETAINED_WINS,
 ) -> ScheduleProjection:
-    """Project named scenarios and summarize their target-NPI range.
-
-    ``expected_npi`` is populated only when every scenario has a probability
-    and those probabilities sum to one.  Otherwise the scenarios are treated
-    as an unweighted sensitivity set.
-    """
+    """Project named scenarios and summarize their target-NPI range."""
     if not scenarios:
         raise ValueError("at least one scenario is required")
 
@@ -301,12 +285,7 @@ def enumerate_independent_outcomes(
     *,
     max_scenarios: int = 10_000,
 ) -> tuple[NamedScheduleScenario, ...]:
-    """Expand independent game probabilities into exact joint scenarios.
-
-    Zero-probability outcomes are omitted.  The explicit limit prevents an
-    accidental ``3 ** number_of_games`` explosion; larger schedules should use
-    a deliberately selected scenario set or a later sampling layer.
-    """
+    """Expand independent game probabilities into exact joint scenarios."""
     if not probabilities:
         raise ValueError("at least one probability triple is required")
     if max_scenarios < 1:

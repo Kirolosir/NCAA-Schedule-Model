@@ -1,9 +1,4 @@
-"""Allocation-light Jacobi solver, regression checked against division_npi.
-
-This repeats the verified season rule using numeric arrays. It avoids creating
-millions of audit dataclasses while evaluating schedule scenarios; the original
-implementation remains the reference for detailed component explanations.
-"""
+"""Allocation-light Jacobi solver, regression checked against division_npi."""
 
 from math import fsum, isfinite
 

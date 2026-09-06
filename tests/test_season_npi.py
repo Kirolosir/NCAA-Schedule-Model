@@ -74,12 +74,7 @@ class TestOfficial2024ExportRegression(unittest.TestCase):
         cls.fixture = json.loads(FIXTURE_PATH.read_text())
 
     def test_five_teams_reproduce_published_npi_and_adjusted_record(self) -> None:
-        """Use schedules plus opponent NPIs from the official NCAA export.
-
-        The workbook displays NPIs to only three decimals, so reconstructed
-        values can differ from the hidden full-precision NCAA inputs by less
-        than 0.001. No rounding occurs in calculate_season_npi itself.
-        """
+        """Use schedules plus opponent NPIs from the official NCAA export."""
         self.assertEqual(len(self.fixture["teams"]), 5)
 
         for team in self.fixture["teams"]:

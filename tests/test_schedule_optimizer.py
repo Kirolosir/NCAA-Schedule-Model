@@ -148,8 +148,7 @@ class TestScheduleScoring(RealDataCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.model = OutcomeModel.fit(cls.games, cls.ratings)
-        # Historical Amherst results are real; lock these to test mechanics
-        # cheaply, without replacing the division by a synthetic graph.
+        # Lock real Amherst results to reduce the test's scenario count.
         cls.historical = []
         reverse = {"win": "loss", "loss": "win", "tie": "tie"}
         for g in cls.games:

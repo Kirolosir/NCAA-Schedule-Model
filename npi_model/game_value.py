@@ -1,9 +1,4 @@
-"""Single-game NPI value calculation.
-
-This module deliberately contains only the per-game formula. Team-level rules,
-including iterative opponent NPI convergence and any minimum-win adjustment,
-belong in later modules so that each modeling assumption remains visible.
-"""
+"""Single-game NPI value calculation."""
 
 from dataclasses import dataclass
 from math import isfinite
@@ -33,18 +28,7 @@ class GameValueBreakdown:
 
 
 def calculate_game_value(result: Result, opponent_npi: float) -> GameValueBreakdown:
-    """Calculate one game's NPI value from its result and opponent NPI.
-
-    Formula:
-        0.15 * result value + 0.85 * opponent NPI + quality-win bonus
-
-    A win is worth 100 result points and a loss is worth 0. A win over an
-    opponent above 54.0 receives a bonus of 0.75 times the amount above 54.0.
-    No rounding is performed inside the calculation.
-
-    Ties are intentionally not accepted until their official treatment is
-    confirmed from source data or NCAA documentation.
-    """
+    """Calculate one game's NPI value from its result and opponent NPI."""
     if result not in ("win", "loss"):
         raise ValueError("result must be 'win' or 'loss'")
     if not isfinite(opponent_npi) or not 0.0 <= opponent_npi <= 100.0:
@@ -68,4 +52,3 @@ def calculate_game_value(result: Result, opponent_npi: float) -> GameValueBreakd
         quality_win_bonus=quality_win_bonus,
         total=total,
     )
-

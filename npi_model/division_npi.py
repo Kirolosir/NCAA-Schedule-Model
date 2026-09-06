@@ -1,11 +1,4 @@
-"""Simultaneous division-wide NPI iteration.
-
-One rating pass must use only opponent ratings from the previous pass.  That
-Jacobi-style update matters: updating teams in place would make the answer
-depend on team ordering and would not reproduce the NCAA calculation.
-
-No rating is rounded during a pass or while testing for convergence.
-"""
+"""Simultaneous division-wide NPI iteration."""
 
 from dataclasses import dataclass
 from math import isfinite
@@ -79,9 +72,7 @@ def _build_schedules(
         if game.result_a not in ("win", "loss", "tie"):
             raise ValueError("result_a must be 'win', 'loss', or 'tie'")
 
-        # A game is countable only when both teams are NPI-eligible.  The real
-        # 2024 export contains two D-III teams with records but no published
-        # NPI; games involving either are therefore outside the rating graph.
+        # Both teams must be eligible; the export includes two without published NPIs.
         if game.team_a not in team_set or game.team_b not in team_set:
             continue
 
@@ -107,11 +98,7 @@ def calculate_adjusted_win_percentages(
     *,
     eligible_teams: Iterable[str] | None = None,
 ) -> dict[str, float]:
-    """Return each eligible team's 0-100 adjusted win percentage.
-
-    Men's soccer has 1.0 home/away weights, so a win is one adjusted win and a
-    tie is half a win plus half a loss.
-    """
+    """Return each eligible team's 0-100 adjusted win percentage."""
     teams, schedules = _build_schedules(games, eligible_teams)
     percentages: dict[str, float] = {}
     for team in teams:
@@ -129,12 +116,7 @@ def opponent_win_percentage_seed(
     eligible_teams: Iterable[str] | None = None,
     strength_of_schedule_weight: float = 0.85,
 ) -> dict[str, float]:
-    """Build the NCAA-style initial seed from opponents' win percentages.
-
-    The initial pass omits the team's own result value and quality-win bonus.
-    With equal game weights, the seed is 85% of the mean adjusted win
-    percentage of a team's opponents.
-    """
+    """Build the NCAA-style initial seed from opponents' win percentages."""
     if (
         not isfinite(strength_of_schedule_weight)
         or not 0.0 <= strength_of_schedule_weight <= 1.0
@@ -189,8 +171,7 @@ def _calculate_pass_from_schedules(
     previous_ratings: Mapping[str, float],
     minimum_retained_wins: float,
 ) -> dict[str, float]:
-    # Build an entirely new mapping.  No value calculated in this pass can be
-    # observed by another team until the next pass.
+    # Use only the previous pass so team order cannot affect the result.
     return {
         team: calculate_season_npi(
             [
@@ -234,11 +215,7 @@ def iterate_division_npi(
     max_iterations: int = 10_000,
     minimum_retained_wins: float = MINIMUM_RETAINED_WINS,
 ) -> DivisionNPIResult:
-    """Iterate simultaneous passes until every team changes by at most tolerance.
-
-    When ``initial_ratings`` is omitted, the NCAA-style opponent-win-percentage
-    seed is used.  A supplied mapping must cover every eligible team exactly.
-    """
+    """Iterate simultaneous passes until every team changes by at most tolerance."""
     if not isfinite(convergence_tolerance) or convergence_tolerance <= 0.0:
         raise ValueError("convergence_tolerance must be finite and positive")
     if max_iterations < 1:

@@ -1,8 +1,4 @@
-"""Loopback-only dashboard API. Calls the existing Python model, never a JS copy.
-
-No coach inputs or job results are written to disk. One cancellable calculation
-runs at a time; the browser can keep exploring while it runs.
-"""
+"""Loopback-only dashboard API. Calls the existing Python model, never a JS copy."""
 
 import argparse
 from dataclasses import asdict, replace
@@ -141,8 +137,7 @@ class AppState:
             raise ValueError("Exploration needs an object")
         value = number(request.get("opponent_npi"), "Opponent NPI", 0, 100)
         raw = request.get("config", default_config())
-        # Candidate feasibility is irrelevant to one-game arithmetic. Validate
-        # fixed games with a temporary known nonconference candidate if needed.
+        # A temporary real candidate lets the explorer accept an incomplete pool.
         config = dict(raw)
         fixed_names = {g.get("team") for g in config.get("fixed_games", []) if isinstance(g, dict)}
         spare = next(t for t in self.ratings if t not in fixed_names and t != config.get("target_team", "Amherst"))
@@ -255,7 +250,10 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # Fast slider edits can abort an obsolete browser request.
 
     def trusted_request(self):
         host = self.headers.get("Host", "")
@@ -272,7 +270,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/bootstrap":
             return self.reply(self.state.bootstrap())
         if path == "/api/health":
-            return self.reply({"status": "ok", "teams": len(self.state.ratings)})
+            return self.reply({"status": "ok", "app": "ncaa-schedule-lab", "teams": len(self.state.ratings)})
         if path.startswith("/api/jobs/"):
             try:
                 return self.reply(self.state.job(path.rsplit("/", 1)[-1]))

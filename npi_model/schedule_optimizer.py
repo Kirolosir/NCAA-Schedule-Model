@@ -1,9 +1,4 @@
-"""Full-division Monte Carlo scoring with paired schedule comparisons.
-
-Every simulated outcome reconverges the graph. Shared per-opponent random
-draws reduce noise when comparing schedules. A separate random seed validates
-the screening finalists. NPI means, ranges, and errors are kept unrounded.
-"""
+"""Full-division Monte Carlo scoring with paired schedule comparisons."""
 
 from dataclasses import asdict, replace
 from hashlib import sha256
@@ -124,11 +119,7 @@ def risk_reward(evaluator, teams, *, samples, seed):
 
 
 def band_arithmetic(config, bands, fixed, ratings, model, target):
-    """Diagnostic only: fixed opponent ratings and one added slot, not a graph forecast.
-
-    High rating bands without schedules cannot have honest division projections.
-    Their exact arithmetic can still be shown, with the limitation visible.
-    """
+    """Diagnostic only: fixed opponent ratings and one added slot, not a graph forecast."""
     games = []
     strength = config.get("target_recent_npi", ratings[target])
     for g in fixed:
@@ -143,8 +134,7 @@ def band_arithmetic(config, bands, fixed, ratings, model, target):
         if row["scale"] == "rating":
             low, high = band.get("lower"), band.get("upper")
             if high is not None and (low is None or low < 100):
-                # Finite bands: sample both numerical boundaries and midpoint;
-                # the upper endpoint is a limit probe, membership is upper-exclusive.
+                # Probe the upper boundary, though band membership excludes it.
                 lo = max(0.0, float(low or 0))
                 hi = min(100.0, float(high))
                 for value in (lo, (lo+hi)/2, hi):
@@ -207,8 +197,7 @@ def rank_schedules(games, ratings, config, *, progress=None):
         if progress:
             progress(f"Scored schedule {i}/{total}: mean NPI {mean(values):.3f}")
     screened.sort(key=lambda row: (-row["screening"]["mean"], row["opponents"]))
-    # Validate a larger shortlist than the requested output; don't assume the
-    # single highest noisy screening mean is the true maximizer.
+    # Validate extra finalists because sampling noise can change their order.
     finalists = screened[:min(len(screened), max(top_n*2, top_n))]
     validation_seed = seed+1000003
     baseline_validation = evaluator.sample((), samples=config["validation_samples"], seed=validation_seed)
@@ -238,8 +227,6 @@ def rank_schedules(games, ratings, config, *, progress=None):
         ]
         if progress:
             progress(f"Explained finalist {i}/{len(top)}: win/tie/loss impacts for every open opponent")
-    # Band representatives and named candidates also get a common, standalone
-    # one-open-slot comparison so default output includes both views.
     standalone = []
     for t in sorted(names | extra_names):
         standalone.extend(risk_reward(evaluator, (t,), samples=config["insight_samples"], seed=seed+3000003))

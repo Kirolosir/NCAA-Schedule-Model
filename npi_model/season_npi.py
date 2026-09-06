@@ -1,19 +1,4 @@
-"""Team-season NPI aggregation for 2024 Division III men's soccer.
-
-The NCAA calculation treats each result as one or more independently weighted
-components:
-
-* win: 1.0 win component
-* loss: 1.0 loss component
-* tie: 0.5 win component plus 0.5 loss component
-
-Components whose inclusion would move NPI in the counterintuitive direction
-are excluded: a win that lowers NPI, or a loss that raises it. The win side is
-constrained by the sport's minimum-retained-wins dial. Components are evaluated
-from highest unit game value to lowest.
-
-No intermediate rounding is performed.
-"""
+"""Team-season NPI aggregation for 2024 Division III men's soccer."""
 
 from dataclasses import dataclass
 from math import fsum, isfinite
@@ -78,15 +63,7 @@ def calculate_season_npi(
     *,
     minimum_retained_wins: float = MINIMUM_RETAINED_WINS,
 ) -> SeasonNPIBreakdown:
-    """Aggregate game values into one season NPI.
-
-    The supplied opponent NPIs should all come from the same iteration/pass.
-    This function performs one team's aggregation only; division-wide iteration
-    will call it repeatedly with the previous pass's opponent NPIs.
-
-    A team with no win component (that is, only losses) receives 85% of its
-    lowest-rated opponent's NPI. This is the NCAA algorithm's winless-team rule.
-    """
+    """Aggregate game values into one season NPI."""
     if not games:
         raise ValueError("at least one game is required")
     if not isfinite(minimum_retained_wins) or minimum_retained_wins < 0:
@@ -124,8 +101,7 @@ def calculate_season_npi(
                 )
             )
 
-    # The NCAA algorithm has a separate seed/continuation rule for a team with
-    # no wins or ties. The summary export reports an adjusted record of 0.0-0.0.
+    # Winless teams use the lowest opponent loss value and an adjusted 0.0-0.0 record.
     if not win_candidates:
         npi = min(component.unit_value for component in loss_candidates)
         components = tuple(
@@ -164,8 +140,6 @@ def calculate_season_npi(
     current_npi = total_rating / total_weight if total_weight else 0.0
     retained_win_weight = 0.0
 
-    # Evaluate win components from strongest to weakest. A component is retained
-    # if it improves the running average, or if it is needed to reach the dial.
     for component in win_candidates:
         full_rating = component.unit_value * component.weight
         candidate_npi = (total_rating + full_rating) / (
@@ -181,7 +155,7 @@ def calculate_season_npi(
         elif retained_win_weight >= minimum_retained_wins:
             retained_weight = 0.0
         else:
-            # Only the portion needed to reach the minimum is retained.
+            # A fractional component can fill the remaining minimum-win weight.
             retained_weight = minimum_retained_wins - retained_win_weight
 
         retained_weights[id(component)] = retained_weight
@@ -191,8 +165,6 @@ def calculate_season_npi(
             retained_win_weight += retained_weight
             current_npi = total_rating / total_weight
 
-    # Losses were initially included. Remove high-value loss components when
-    # their inclusion raised the average. There is no minimum-loss constraint.
     for component in loss_candidates:
         retained_weight = retained_weights[id(component)]
         if not retained_weight or total_weight <= retained_weight:
@@ -232,4 +204,3 @@ def calculate_season_npi(
         components=components,
         used_winless_rule=False,
     )
-

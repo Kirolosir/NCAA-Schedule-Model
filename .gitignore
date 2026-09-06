@@ -32,3 +32,7 @@ dist/
 # Local coach inputs and generated planning reports can contain private plans.
 planning_inputs/
 reports/
+
+# Dashboard dependencies and generated build/type caches.
+node_modules/
+*.tsbuildinfo

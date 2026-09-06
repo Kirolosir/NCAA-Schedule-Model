@@ -1,10 +1,4 @@
-"""Transparent provisional outcome probabilities fitted to historical results.
-
-Three logits are (b*d/2, a, -b*d/2), where d is the NPI difference / 10.
-Exchanging teams swaps win/loss probabilities and leaves ties unchanged.
-End-period NPIs include the games being fitted: all fit diagnostics here are
-retrospective, NOT evidence of prospective forecast accuracy.
-"""
+"""Retrospective outcome probabilities; end-period ratings include the fitted results."""
 
 from dataclasses import dataclass
 from math import exp, fsum, isfinite, log
@@ -26,8 +20,7 @@ def _loss(rows, slope, tie):
 
 
 def _fit(rows):
-    # Convex multinomial logistic likelihood, optimized by coordinate search.
-    # Fixed bounds and steps make fitting deterministic and dependency-free.
+    # Fixed-step coordinate search keeps the convex likelihood fit deterministic.
     slope, tie, step = 1.0, -1.0, 1.0
     score = _loss(rows, slope, tie)
     while step > 1e-6:
@@ -70,8 +63,7 @@ class OutcomeModel:
         ties = sum(y == 1 for _, y in rows)
         tie_rate = min(1-1e-9, max(1e-9, ties/len(rows)))
         baseline_a = log(2*tie_rate/(1-tie_rate))
-        # Index split tests the functional relationship, but rating leakage
-        # persists in both sets and is explicitly disclosed to the caller.
+        # End-period ratings leak results into both halves of this split.
         train = [row for i, row in enumerate(rows) if i % 5]
         test = [row for i, row in enumerate(rows) if i % 5 == 0]
         hold_b, hold_a = _fit(train or rows)
