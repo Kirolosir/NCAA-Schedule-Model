@@ -60,8 +60,12 @@ Browser interaction and visual checks have not been performed.
 
 ## Render deployment
 
+Live app: [Schedule Lab](https://ncaa-schedule-lab.onrender.com).
+
 The repository includes `render.yaml` for a free Docker web service. In Render,
-create a Blueprint from this repository and select `main`. The Docker build
+the existing service is `ncaa-schedule-lab` in the `NCAA Schedule Model` project.
+To create another instance, use a Blueprint from this repository and select `main`.
+The Docker build
 compiles the frontend and runs the Python API with Gunicorn. The public address
 comes from Render's `RENDER_EXTERNAL_URL`; no API key or model service is needed.
 For another host, set `PUBLIC_ORIGIN` to the full HTTPS origin and provide `PORT`.

@@ -55,7 +55,12 @@ The hosted app is publicly reachable. Comparison jobs are isolated by signed
 browser sessions; there is no user login or database. The tests verify ownership
 checks, cross-origin rejection, input limits, and restricted file access.
 A single Gunicorn worker preserves the in-memory queue. The configured plan is
-free, with automatic deploys disabled. No Render service has been created yet.
+free, with automatic deploys disabled. The service went live on September 6, 2026
+at https://ncaa-schedule-lab.onrender.com. The production page, assets, 407-team
+data, full-precision explorer, and session ownership checks passed over HTTPS.
+An end-to-end Babson comparison completed 62 full-division solves in 247 seconds
+on free compute. Its projected mean, 59.98540286883173, matched the local result
+within 1e-10. This was a deployment check with two draws, not a reliable forecast.
 
 ## Proposed source snapshot
 
