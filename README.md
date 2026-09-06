@@ -58,6 +58,43 @@ the frontend build type-checks TypeScript. HTTP smoke checks cover static assets
 validation, exploration, a real comparison, cancellation, and origin restrictions.
 Browser interaction and visual checks have not been performed.
 
+## Render deployment
+
+The repository includes `render.yaml` for a free Docker web service. In Render,
+create a Blueprint from this repository and select `main`. The Docker build
+compiles the frontend and runs the Python API with Gunicorn. The public address
+comes from Render's `RENDER_EXTERNAL_URL`; no API key or model service is needed.
+For another host, set `PUBLIC_ORIGIN` to the full HTTPS origin and provide `PORT`.
+
+The hosted app is a public demo with session-separated results, not a private
+login-protected site. A signed, secure cookie limits access to each browser's
+jobs. The server keeps at most eight jobs in memory and runs one comparison at
+a time. Jobs stop at the next progress update after twenty minutes. Reloads,
+restarts, and free-service sleep can lose results; export anything worth keeping.
+The app starts with Quick exploration settings on the hosted version.
+
+Render's free service sleeps after fifteen minutes without traffic and can take
+about a minute to start again. Large comparisons may be slow on shared free
+compute. See [Render's free-service limits](https://render.com/docs/free).
+Automatic deploys are disabled so a source push cannot interrupt a coach's run.
+
+The image includes the reviewed division fixture, model code, and built frontend.
+Raw Excel files, private inputs, local reports, credentials, and Git metadata are
+excluded from the build context. The production process runs as a non-root user.
+Host/origin checks, session ownership, and security headers are tested separately
+from the mathematical model. No account registration or persistent storage is added.
+
+Install the hosted dependencies and run the full tests with:
+
+```bash
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+```
+
+Use exactly one Gunicorn worker while jobs are stored in memory. Multiple workers
+would have independent queues and sessions; horizontal scaling needs a shared job
+store first.
+
 ## Single-game value
 
 For a win, the result value is 100; for a loss, it is 0.

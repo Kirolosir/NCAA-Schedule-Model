@@ -106,10 +106,11 @@ class CalculationCancelled(Exception):
 
 
 class AppState:
-    def __init__(self, *, ranker=rank_schedules):
+    def __init__(self, *, ranker=rank_schedules, max_job_seconds=None):
         self.data, self.ratings, self.games = load_graph()
         self.model = OutcomeModel.fit(self.games, self.ratings)
         self.ranker = ranker
+        self.max_job_seconds = max_job_seconds
         self.lock = threading.Lock()
         self.jobs = {}
         self.active = None
@@ -169,7 +170,7 @@ class AppState:
                 "curve": [{"npi": npi, "outcomes": evaluate(npi)} for npi in range(30, 81)],
                 "assumptions": assumptions, "method": "fixed_ratings_modal_outcomes"}
 
-    def start(self, raw):
+    def start(self, raw, *, owner=None):
         config, summary = validate_config(raw, self.ratings)
         with self.lock:
             if self.active:
@@ -178,7 +179,8 @@ class AppState:
                 del self.jobs[next(iter(self.jobs))]
             job_id = uuid4().hex
             job = {"id": job_id, "status": "running", "message": "Preparing division model", "progress": 0,
-                   "started": time.time(), "config": config, "summary": summary, "cancel": threading.Event()}
+                   "started": time.time(), "config": config, "summary": summary,
+                   "owner": owner, "cancel": threading.Event()}
             self.jobs[job_id] = job
             self.active = job_id
         threading.Thread(target=self._run, args=(job_id,), daemon=True).start()
@@ -186,9 +188,12 @@ class AppState:
 
     def _run(self, job_id):
         job = self.jobs[job_id]
+        started = time.monotonic()
         def progress(message):
             if job["cancel"].is_set():
                 raise CalculationCancelled()
+            if self.max_job_seconds and time.monotonic()-started > self.max_job_seconds:
+                raise TimeoutError("Time limit reached. Try fewer candidates or Quick exploration.")
             match = re.search(r"(\d+)/(\d+)", message)
             fraction = int(match[1])/int(match[2]) if match else 0
             level = job["progress"]
@@ -220,15 +225,15 @@ class AppState:
                 job["finished"] = time.time()
                 self.active = None
 
-    def job(self, job_id, *, cancel=False):
+    def job(self, job_id, *, cancel=False, owner=None):
         with self.lock:
-            if job_id not in self.jobs:
+            if job_id not in self.jobs or self.jobs[job_id].get("owner") != owner:
                 raise KeyError("Comparison not found; it may have expired after restarting the app")
             job = self.jobs[job_id]
             if cancel and job["status"] == "running":
                 job["cancel"].set()
                 job.update(status="cancelling", message="Stopping after the current calculation…")
-            return {k: v for k, v in job.items() if k != "cancel"}
+            return {k: v for k, v in job.items() if k not in {"cancel", "owner"}}
 
 
 class Handler(SimpleHTTPRequestHandler):

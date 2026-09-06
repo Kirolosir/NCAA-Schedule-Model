@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ncaa-schedule-lab
+    runtime: docker
+    plan: free
+    region: virginia
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeployTrigger: off

@@ -1,6 +1,6 @@
 # Publication review
 
-Reviewed September 5, 2026.
+Reviewed September 6, 2026.
 
 ## Repository status
 
@@ -9,9 +9,9 @@ files and their dependency entries. Its author, dates, parents, and message were
 preserved. The two earlier commits are unchanged. A subsequent local commit
 records the finished app and shortened code comments.
 
-The remote has not been updated. Its cached `origin/main` still points to the
-old history. Publishing this branch requires a separately approved force-push
-with an explicit lease; a normal pull would bring the old history back.
+The cleaned history was published to GitHub with an exact force-with-lease on
+September 6. The Render configuration is a normal follow-up commit; it does not
+require another history rewrite.
 
 A verified history bundle and working-file archive are stored outside the
 repository at `/private/tmp/npi-history-backup.cVtRUo/`. Original objects,
@@ -44,25 +44,42 @@ The frontend package audit reports zero known vulnerabilities as of this review.
 Third-party package names, license information, and funding metadata are unchanged
 except for removal of the unused build integration.
 
+## Hosted deployment
+
+The Render image contains model code, the reviewed division fixture, and compiled
+frontend assets. An allowlist-based build context excludes private inputs, raw
+workbooks, reports, Git metadata, and local backups. No service credentials are
+stored in source. Session-signing material is generated in memory at startup.
+
+The hosted app is publicly reachable. Comparison jobs are isolated by signed
+browser sessions; there is no user login or database. The tests verify ownership
+checks, cross-origin rejection, input limits, and restricted file access.
+A single Gunicorn worker preserves the in-memory queue. The configured plan is
+free, with automatic deploys disabled. No Render service has been created yet.
+
 ## Proposed source snapshot
 
-These 111 files form the cleaned source snapshot under the existing ignore
+These 118 files form the cleaned source snapshot under the existing ignore
 rules. Deleted setup files, private inputs, backups, and generated output are
 excluded. Recheck the list if files change before publication.
 
 ```text
+.dockerignore
 .gitignore
+Dockerfile
 PUBLICATION_AUDIT.md
 README.md
 Start Schedule Lab.command
 examples/named-opponents.json
 examples/rank-band-75-100.json
+gunicorn.conf.py
 npi_model/__init__.py
 npi_model/__main__.py
 npi_model/app_server.py
 npi_model/division_npi.py
 npi_model/fast_division.py
 npi_model/game_value.py
+npi_model/hosted_app.py
 npi_model/outcome_model.py
 npi_model/planning.py
 npi_model/planning_report.py
@@ -70,12 +87,15 @@ npi_model/schedule_optimizer.py
 npi_model/schedule_simulator.py
 npi_model/season_npi.py
 pyproject.toml
+render.yaml
+requirements.txt
 scripts/launch_app.py
 tests/data/ncaa_2024_10_27_division.json
 tests/data/ncaa_2024_10_27_verification.json
 tests/test_app_server.py
 tests/test_division_npi.py
 tests/test_game_value.py
+tests/test_hosted_app.py
 tests/test_schedule_optimizer.py
 tests/test_schedule_simulator.py
 tests/test_season_npi.py

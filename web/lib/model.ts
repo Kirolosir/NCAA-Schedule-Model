@@ -22,6 +22,7 @@ export type Report = {config: Config; target_team: string; top_schedules: Schedu
   division_solves: number; source: {cutoff: string}; limitations: string[]};
 export type Team = {name: string; npi: number; rank: number; record: string};
 export type Bootstrap = {config: Config; teams: Team[]; source: {cutoff: string}; report: Report | null;
+  deployment?: {hosted: boolean; max_job_minutes: number};
   model: {slope: number; tie_log_weight: number; fit_log_loss: number; sample_count: number}};
 export type Validation = {candidate_count: number; combinations: number; bands: Band[]; candidates: Candidate[]};
 export type Job = {id: string; status: string; message: string; progress: number; report?: Report; config: Config};
