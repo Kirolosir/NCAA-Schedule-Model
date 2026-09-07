@@ -34,6 +34,8 @@ class TestHostedApp(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(len(data["teams"]), 402)
         self.assertEqual(data["config"]["samples"], 4)
+        self.assertEqual(data["config"]["analysis_mode"], "quick")
+        self.assertFalse(data["config"]["include_standalone_insights"])
         self.assertTrue(data["deployment"]["hosted"])
         self.assertIsNone(data["report"])
         cookie = response.headers["Set-Cookie"]

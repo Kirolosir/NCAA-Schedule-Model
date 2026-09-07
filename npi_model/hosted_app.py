@@ -70,7 +70,8 @@ def create_app(*, state=None, public_origin=None):
             data = model.bootstrap(request.args.get("season", "2025"))
         except ValueError as error:
             return jsonify(error=str(error)), 400
-        data["config"].update(samples=4, validation_samples=8, insight_samples=2)
+        data["config"].update(samples=4, validation_samples=4, insight_samples=2,
+                              analysis_mode="quick", include_standalone_insights=False)
         data.update(report=None, deployment={"hosted": True, "max_job_minutes": 20})
         return jsonify(data)
 

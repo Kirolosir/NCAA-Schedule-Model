@@ -58,7 +58,9 @@ class ScheduleEvaluator:
         self.background = [g for g in games if target not in (g.team_a, g.team_b)]
         self.tolerance = tolerance
         self.cache = {}
+        self.screen_cache = {}
         self.solves = 0
+        self._warm_ratings = self.ratings
         strength = ratings[target] if target_recent_npi is None else target_recent_npi
         self.probabilities = {
             c.team: c.probabilities or model.predict(strength, c.recent_npi) for c in candidates
@@ -70,10 +72,21 @@ class ScheduleEvaluator:
         key = tuple(sorted(outcomes))
         if key not in self.cache:
             games = self.background + [DivisionGame(self.target, t, r) for t, r in key]
-            result = CompiledDivision(games, self.ratings).solve(self.ratings, tolerance=self.tolerance)
+            result = CompiledDivision(games, self.ratings).solve(
+                self._warm_ratings, tolerance=self.tolerance, exact=False)
+            self._warm_ratings = result.ratings
             self.cache[key] = result.ratings[self.target]
             self.solves += 1
         return self.cache[key]
+
+    def estimate(self, outcomes, *, iterations=8):
+        key = (iterations, tuple(sorted(outcomes)))
+        if key not in self.screen_cache:
+            games = self.background + [DivisionGame(self.target, t, r) for t, r in key[1]]
+            ratings = CompiledDivision(games, self.ratings).estimate(
+                self.ratings, iterations=iterations)
+            self.screen_cache[key] = ratings[self.target]
+        return self.screen_cache[key]
 
     def sample(self, teams, *, samples, seed, forced=None):
         forced = forced or {}
@@ -95,6 +108,27 @@ class ScheduleEvaluator:
             results.append(self.solve(outcomes))
         return results
 
+    def approximate_sample(self, teams, *, samples, seed, forced=None):
+        forced = forced or {}
+        names = [g.team for g in self.fixed] + list(teams)
+        draws = {t: _uniforms(seed, t, samples) for t in names}
+        locked = {g.team: g.result for g in self.fixed if g.result is not None}
+        results = []
+        for i in range(samples):
+            season = [SeasonGame(t, self.ratings[t], locked.get(t) or forced.get(t) or
+                                 _draw(self.probabilities[t], draws[t][i])) for t in names]
+            results.append(calculate_season_npi(season).npi)
+        return results
+
+    def screening_sample(self, teams, *, samples, seed, forced=None):
+        forced = forced or {}
+        names = [g.team for g in self.fixed] + list(teams)
+        draws = {t: _uniforms(seed, t, samples) for t in names}
+        locked = {g.team: g.result for g in self.fixed if g.result is not None}
+        return [self.estimate([(t, locked.get(t) or forced.get(t) or
+                               _draw(self.probabilities[t], draws[t][i])) for t in names])
+                for i in range(samples)]
+
     def stress(self, teams, result):
         fixed = [(g.team, g.result or result) for g in self.fixed]
         return self.solve(fixed+[(t, result) for t in teams])
@@ -113,6 +147,25 @@ def risk_reward(evaluator, teams, *, samples, seed):
             row[outcome] = {"npi": summarize(values),
                             "impact": summarize([x-y for x, y in zip(values, baseline)])}
         expected = evaluator.sample(teams, samples=samples, seed=seed)
+        row["expected_impact"] = summarize([x-y for x, y in zip(expected, baseline)])
+        row["swing_win_minus_loss"] = row["win"]["npi"]["mean"]-row["loss"]["npi"]["mean"]
+        rows.append(row)
+    return rows
+
+
+def approximate_risk_reward(evaluator, teams, *, samples, seed):
+    rows = []
+    for team in teams:
+        without = tuple(t for t in teams if t != team)
+        baseline = evaluator.approximate_sample(without, samples=samples, seed=seed)
+        row = {"team": team, "baseline": "same slate with this game omitted",
+               "probabilities": asdict(evaluator.probabilities[team])}
+        for outcome in ("win", "tie", "loss"):
+            values = evaluator.approximate_sample(teams, samples=samples, seed=seed,
+                                                  forced={team: outcome})
+            row[outcome] = {"npi": summarize(values),
+                            "impact": summarize([x-y for x, y in zip(values, baseline)])}
+        expected = evaluator.approximate_sample(teams, samples=samples, seed=seed)
         row["expected_impact"] = summarize([x-y for x, y in zip(expected, baseline)])
         row["swing_win_minus_loss"] = row["win"]["npi"]["mean"]-row["loss"]["npi"]["mean"]
         rows.append(row)
@@ -188,18 +241,21 @@ def rank_schedules(games, ratings, config, *, progress=None):
     evaluator = ScheduleEvaluator(games, ratings, target, fixed, candidates+tuple(extras), model,
                                   target_recent_npi=config.get("target_recent_npi"), tolerance=tolerance)
     seed = config["seed"]
-    baseline = evaluator.sample((), samples=config["samples"], seed=seed)
+    fast = config.get("analysis_mode", "thorough") != "thorough"
+    screening_sample = evaluator.screening_sample if fast else evaluator.sample
+    baseline = screening_sample((), samples=config["samples"], seed=seed)
     screened = []
     for i, optional in enumerate(combinations(sorted(names-required), slots-len(required)), 1):
         teams = tuple(sorted(required | set(optional)))
-        values = evaluator.sample(teams, samples=config["samples"], seed=seed)
+        values = screening_sample(teams, samples=config["samples"], seed=seed)
         screened.append({"opponents": teams, "screening": summarize(values),
                          "screening_impact": summarize([x-y for x, y in zip(values, baseline)])})
         if progress:
             progress(f"Scored schedule {i}/{total}: mean NPI {mean(values):.3f}")
     screened.sort(key=lambda row: (-row["screening"]["mean"], row["opponents"]))
     # Validate extra finalists because sampling noise can change their order.
-    finalists = screened[:min(len(screened), max(top_n*2, top_n))]
+    finalist_count = top_n*2
+    finalists = screened[:min(len(screened), max(finalist_count, top_n))]
     validation_seed = seed+1000003
     baseline_validation = evaluator.sample((), samples=config["validation_samples"], seed=validation_seed)
     for i, row in enumerate(finalists, 1):
@@ -214,11 +270,12 @@ def rank_schedules(games, ratings, config, *, progress=None):
     for row in finalists:
         row["paired_gap_from_leader"] = summarize([x-y for x, y in zip(best, row.pop("_values"))])
     top = finalists[:top_n]
+    impact_evaluator = approximate_risk_reward if fast else risk_reward
     for i, row in enumerate(top, 1):
         row["rank"] = i
         row["stress_all_unlocked_wins"] = evaluator.stress(row["opponents"], "win")
         row["stress_all_unlocked_losses"] = evaluator.stress(row["opponents"], "loss")
-        row["opponent_impacts"] = risk_reward(evaluator, row["opponents"], samples=config["insight_samples"], seed=seed+2000003)
+        row["opponent_impacts"] = impact_evaluator(evaluator, row["opponents"], samples=config["insight_samples"], seed=seed+2000003)
         support = max(row["opponent_impacts"], key=lambda r: r["expected_impact"]["mean"])
         risk = min(row["opponent_impacts"], key=lambda r: r["loss"]["impact"]["mean"])
         row["reasoning"] = [
@@ -229,15 +286,19 @@ def rank_schedules(games, ratings, config, *, progress=None):
         if progress:
             progress(f"Explained finalist {i}/{len(top)}: win/tie/loss impacts for every open opponent")
     standalone = []
-    for t in sorted(names | extra_names):
-        standalone.extend(risk_reward(evaluator, (t,), samples=config["insight_samples"], seed=seed+3000003))
-        if progress:
-            progress(f"Evaluated standalone risk/reward: {t}")
+    if config.get("include_standalone_insights", True):
+        for t in sorted(names | extra_names):
+            standalone.extend(impact_evaluator(evaluator, (t,), samples=config["insight_samples"], seed=seed+3000003))
+            if progress:
+                progress(f"Evaluated standalone risk/reward: {t}")
     probability_note = ("Probability fitting uses earlier-season ratings to predict later-season results. The newest season is held out from fitting."
                         if fitted.method == "prior_season_out_of_time" else
                         "Probability fitting uses same-period end ratings, including the outcomes being fitted. It is a retrospective comparison, not prospective validation.")
     return {
         "config": config, "target_team": target,
+        "calculation": {"screening": "eight-pass division shortlist" if fast else "full-division",
+                        "finalists": "full-division", "opponent_impacts":
+                        "fixed-rating quick estimate" if fast else "full-division"},
         "background": {"teams": len(ratings), "games": len(games), "rating_min": min(ratings.values()),
                        "rating_max": max(ratings.values())},
         "probability_model": {"fit": asdict(fitted), "slope_scale": scale,

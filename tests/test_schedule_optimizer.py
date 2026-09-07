@@ -49,6 +49,12 @@ class TestFastDivision(RealDataCase):
             self.assertLess(max(abs(fast.ratings[t]-reference.ratings[t]) for t in seed), 1e-8)
         self.assertNotAlmostEqual(reference.ratings["Amherst"], self.ratings["Amherst"], places=3)
 
+    def test_fixed_pass_shortlist_uses_same_iteration_rules(self):
+        compiled = CompiledDivision(self.games, self.ratings)
+        converged = compiled.solve(self.ratings, tolerance=1e-10, exact=False)
+        estimated = compiled.estimate(self.ratings, iterations=converged.iterations)
+        self.assertLess(max(abs(estimated[t]-converged.ratings[t]) for t in estimated), 1e-12)
+
     def test_failure_is_not_reported_as_converged(self):
         with self.assertRaises(NPIConvergenceError):
             CompiledDivision(self.games, self.ratings).solve(self.ratings, max_iterations=1)
@@ -232,6 +238,18 @@ class TestScheduleScoring(RealDataCase):
         config["max_combinations"] = 1
         with self.assertRaisesRegex(ValueError, "combinations exceeds"):
             rank_schedules(self.games, self.ratings, config)
+
+    def test_quick_mode_still_converges_every_finalist(self):
+        config = default_config("2024")
+        config.update(fixed_games=[{"team": t, "result": r} for t, r in self.historical if t != "Babson"],
+                      candidates=[{"team": "Babson"}, {"team": "Springfield"}], bands=[],
+                      open_slots=1, samples=2, validation_samples=2, insight_samples=2,
+                      top_n=2, analysis_mode="quick", include_standalone_insights=False)
+        report = rank_schedules(self.games, self.ratings, config)
+        self.assertEqual(report["calculation"]["screening"], "eight-pass division shortlist")
+        self.assertEqual(report["calculation"]["finalists"], "full-division")
+        self.assertEqual(report["standalone_opponents"], [])
+        self.assertGreater(report["division_solves"], 0)
 
 
 class TestSummary(unittest.TestCase):

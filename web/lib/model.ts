@@ -10,6 +10,7 @@ export type Config = {
   representatives_per_band: number; open_slots: number; required: string[]; excluded: string[];
   samples: number; validation_samples: number; insight_samples: number; top_n: number;
   seed: number; max_combinations: number; probability_slope_scale: number; convergence_tolerance: number;
+  analysis_mode: 'quick' | 'standard' | 'thorough'; include_standalone_insights: boolean;
   target_recent_npi?: number;
 };
 export type Summary = {mean: number; p10: number; p90: number; samples: number; mean_standard_error: number; mean_ci95: [number, number]};
@@ -20,7 +21,8 @@ export type Schedule = {rank: number; opponents: string[]; projection: Summary; 
   opponent_impacts: Risk[]; reasoning: string[]};
 export type Report = {config: Config; target_team: string; top_schedules: Schedule[]; validated_finalists: Schedule[];
   screening: unknown[]; standalone_opponents: Risk[]; baseline_projection: Summary; bands: Band[];
-  division_solves: number; source: {cutoff: string}; limitations: string[]};
+  division_solves: number; source: {cutoff: string}; limitations: string[];
+  calculation?: {screening:string; finalists:string; opponent_impacts:string}};
 export type HistoryRow = {season:string; npi:number|null; record:string|null; cutoff:string; rating_kind:string};
 export type Team = {name: string; npi: number; rank: number; record: string; history:HistoryRow[]};
 export type SeasonSource = {season:string; cutoff:string; snapshot:string; rating_kind:string; eligible_npi_teams:number; eligible_npi_games:number; validation:{max_published_error?:number; iterations?:number; published_npi_available?:boolean}};

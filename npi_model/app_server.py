@@ -43,6 +43,10 @@ def validate_config(raw, ratings):
     if unknown:
         raise ValueError(f"Unknown plan setting: {sorted(unknown)[0]}")
     config.update(raw)
+    if config["analysis_mode"] not in ("quick", "standard", "thorough"):
+        raise ValueError("analysis_mode must be quick, standard, or thorough")
+    if type(config["include_standalone_insights"]) is not bool:
+        raise ValueError("include_standalone_insights must be true or false")
     if config["probability_model"] not in ("historical", "retrospective"):
         raise ValueError("Choose the historical or retrospective probability model")
     if config["probability_model"] == "historical" and season not in ("2024", "2025"):

@@ -81,7 +81,8 @@ def default_config(season=DEFAULT_SEASON):
         "excluded": [], "samples": 24, "validation_samples": 64,
         "insight_samples": 8, "top_n": 3, "seed": 20241027,
         "max_combinations": 500, "probability_slope_scale": 1.0 if season in ("2024", "2025") else 0.5,
-        "convergence_tolerance": 1e-8,
+        "convergence_tolerance": 1e-8, "analysis_mode": "thorough",
+        "include_standalone_insights": True,
     }
 
 

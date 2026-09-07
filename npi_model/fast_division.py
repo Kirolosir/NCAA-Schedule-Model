@@ -23,7 +23,7 @@ class CompiledDivision:
             self.schedules.append((wins, losses))
 
     def solve(self, initial_ratings, *, tolerance=1e-8, max_iterations=10000,
-              minimum_retained_wins=10.0):
+              minimum_retained_wins=10.0, exact=True):
         if not isfinite(tolerance) or tolerance <= 0:
             raise ValueError("tolerance must be finite and positive")
         if not isinstance(max_iterations, int) or max_iterations < 1:
@@ -32,6 +32,9 @@ class CompiledDivision:
             raise ValueError("minimum_retained_wins must be finite and nonnegative")
         ratings = _validate_ratings(self.teams, initial_ratings, label="initial_ratings")
         previous = [ratings[t] for t in self.teams]
+        if not exact:
+            return self._solve_planning(previous, tolerance, max_iterations,
+                                        minimum_retained_wins)
         history = []
         for iteration in range(1, max_iterations + 1):
             win_values = [15.0 + .85*x + .75*max(x-54.0, 0.0) for x in previous]
@@ -81,3 +84,69 @@ class CompiledDivision:
                 return DivisionNPIResult(dict(zip(self.teams, current)), iteration,
                                          delta, tolerance, tuple(history))
         raise NPIConvergenceError(f"no convergence in {max_iterations} iterations; delta={delta}")
+
+    def _solve_planning(self, previous, tolerance, max_iterations,
+                        minimum_retained_wins):
+        history = []
+        for iteration in range(1, max_iterations + 1):
+            current = self._planning_pass(previous, minimum_retained_wins)
+            delta = max(abs(a-b) for a, b in zip(previous, current))
+            history.append(delta)
+            previous = current
+            if delta <= tolerance:
+                return DivisionNPIResult(dict(zip(self.teams, current)), iteration,
+                                         delta, tolerance, tuple(history))
+        raise NPIConvergenceError(f"no convergence in {max_iterations} iterations; delta={delta}")
+
+    def estimate(self, initial_ratings, *, iterations=8,
+                 minimum_retained_wins=10.0):
+        if not isinstance(iterations, int) or iterations < 1:
+            raise ValueError("iterations must be a positive integer")
+        ratings = _validate_ratings(self.teams, initial_ratings, label="initial_ratings")
+        previous = [ratings[t] for t in self.teams]
+        for _ in range(iterations):
+            previous = self._planning_pass(previous, minimum_retained_wins)
+        return dict(zip(self.teams, previous))
+
+    def _planning_pass(self, previous, minimum_retained_wins):
+        win_values = [15.0 + .85*x + .75*max(x-54.0, 0.0) for x in previous]
+        loss_values = [.85*x for x in previous]
+        current = []
+        for wins, losses in self.schedules:
+            if not wins:
+                current.append(min(loss_values[i] for i, _ in losses))
+                continue
+            ordered_wins = sorted(wins, key=lambda item: previous[item[0]], reverse=True)
+            ordered_losses = sorted(losses, key=lambda item: previous[item[0]], reverse=True)
+            total = 0.0
+            weight_sum = 0.0
+            for i, weight in ordered_losses:
+                total += loss_values[i]*weight
+                weight_sum += weight
+            npi = total/weight_sum if weight_sum else 0.0
+            kept_wins = 0.0
+            for i, weight in ordered_wins:
+                value = win_values[i]
+                candidate = (total + value*weight)/(weight_sum+weight)
+                if candidate >= npi or kept_wins+weight <= minimum_retained_wins:
+                    retained = weight
+                elif kept_wins >= minimum_retained_wins:
+                    retained = 0.0
+                else:
+                    retained = minimum_retained_wins-kept_wins
+                if retained:
+                    total += value*retained
+                    weight_sum += retained
+                    kept_wins += retained
+                    npi = total/weight_sum
+            for i, weight in ordered_losses:
+                if weight_sum <= weight:
+                    continue
+                value = loss_values[i]
+                candidate = (total-value*weight)/(weight_sum-weight)
+                if candidate < npi:
+                    total -= value*weight
+                    weight_sum -= weight
+                    npi = total/weight_sum
+            current.append(npi)
+        return current
