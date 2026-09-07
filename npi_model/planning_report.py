@@ -82,11 +82,14 @@ def render_report(report):
             lines.append(f"| {band['label']} | {p['opponent_npi']:.3f} | {w['game_value']:.3f} | "
                          f"{loss['game_value']:.3f} | {w['conditional_season_npi']:.3f} | "
                          f"{loss['conditional_season_npi']:.3f} | {w['impact']:+.3f}/{loss['impact']:+.3f} |")
-    lines += ["", "## Assumptions and probability sensitivity", "",
-              f"Historical fit: {fit['sample_count']} games; log loss {fit['fit_log_loss']:.3f}, "
-              f"constant-probability baseline {fit['constant_baseline_log_loss']:.3f}, "
-              f"retrospective holdout {fit['retrospective_holdout_log_loss']:.3f}. "
-              "The ratings contain the outcomes being predicted, including in the holdout; these are not forecast accuracy metrics.", "",
+    if fit.get("method") == "prior_season_out_of_time":
+        fit_text = (f"Prior-season fit: {fit['sample_count']} weighted game observations from {', '.join(fit['training_seasons'])}; "
+                    f"training log loss {fit['fit_log_loss']:.3f}; {fit['holdout_season']} out-of-time log loss "
+                    f"{fit['out_of_time_log_loss']:.3f}. The holdout outcomes did not enter fitting.")
+    else:
+        fit_text = (f"Same-season retrospective fit: {fit['sample_count']} games; log loss {fit['fit_log_loss']:.3f}; "
+                    f"constant-probability baseline {fit['constant_baseline_log_loss']:.3f}. The ratings contain the outcomes being predicted.")
+    lines += ["", "## Assumptions and probability sensitivity", "", fit_text, "",
               f"The fitted strength coefficient is multiplied by {c['probability_slope_scale']}. "
               "Rerun with 0.5 and 1.0, or supply per-game probabilities, to test whether recommendations depend on that assumption.", ""]
     lines += [f"- {note}" for note in report["limitations"]]

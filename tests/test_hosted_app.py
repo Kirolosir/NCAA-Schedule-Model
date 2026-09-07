@@ -32,7 +32,7 @@ class TestHostedApp(unittest.TestCase):
     def test_bootstrap_and_cookie(self):
         response = self.get("/api/bootstrap")
         data = response.get_json()
-        self.assertEqual(len(data["teams"]), 407)
+        self.assertEqual(len(data["teams"]), 402)
         self.assertEqual(data["config"]["samples"], 4)
         self.assertTrue(data["deployment"]["hosted"])
         self.assertIsNone(data["report"])
@@ -41,6 +41,10 @@ class TestHostedApp(unittest.TestCase):
             self.assertIn(flag, cookie)
         self.assertEqual(response.headers["Cache-Control"], "no-store")
         self.assertEqual(response.headers["X-Frame-Options"], "DENY")
+        comparison = self.get("/api/bootstrap?season=2024").get_json()
+        self.assertEqual(len(comparison["teams"]), 407)
+        self.assertEqual(comparison["config"]["season"], "2024")
+        self.assertEqual(self.get("/api/bootstrap?season=../../private").status_code, 400)
 
     def test_host_and_origin_checks(self):
         self.assertEqual(self.client.get("/api/bootstrap", base_url="https://wrong.example").status_code, 400)

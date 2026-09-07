@@ -15,9 +15,11 @@ from uuid import uuid4
 
 from .game_value import calculate_game_value
 from .outcome_model import OutcomeModel
-from .planning import default_config, load_graph, parse_plan
+from .planning import default_config, parse_plan
 from .schedule_optimizer import rank_schedules
 from .season_npi import SeasonGame, calculate_season_npi
+from .seasons import DEFAULT_SEASON, catalog, load_season, team_history
+from .temporal_model import historical_model
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,11 +37,16 @@ def number(value, label, lower, upper, *, integer=False):
 def validate_config(raw, ratings):
     if not isinstance(raw, dict):
         raise ValueError("The plan must be a JSON object")
-    config = default_config()
+    season = raw.get("season", DEFAULT_SEASON)
+    config = default_config(season)
     unknown = set(raw)-set(config)-{"target_recent_npi"}
     if unknown:
         raise ValueError(f"Unknown plan setting: {sorted(unknown)[0]}")
     config.update(raw)
+    if config["probability_model"] not in ("historical", "retrospective"):
+        raise ValueError("Choose the historical or retrospective probability model")
+    if config["probability_model"] == "historical" and season not in ("2024", "2025"):
+        raise ValueError("The historical probability model requires at least one prior-season transition")
     for key in ("fixed_games", "candidates", "bands", "required", "excluded"):
         if not isinstance(config[key], list):
             raise ValueError(f"{key} must be a list")
@@ -107,8 +114,9 @@ class CalculationCancelled(Exception):
 
 class AppState:
     def __init__(self, *, ranker=rank_schedules, max_job_seconds=None):
-        self.data, self.ratings, self.games = load_graph()
-        self.model = OutcomeModel.fit(self.games, self.ratings)
+        self.data, self.ratings, self.games = load_season(DEFAULT_SEASON)
+        self.models = {}
+        self.model = self.model_for(DEFAULT_SEASON, "historical")
         self.ranker = ranker
         self.max_job_seconds = max_job_seconds
         self.lock = threading.Lock()
@@ -125,34 +133,59 @@ class AppState:
             except (ValueError, OSError):
                 pass
 
-    def bootstrap(self):
-        ordered = sorted(self.ratings, key=lambda t: (-self.ratings[t], t))
-        records = {row[0]: row[2] for row in self.data["teams"]}
-        return {"config": default_config(), "source": self.data["source"],
-                "teams": [{"name": t, "npi": self.ratings[t], "rank": i+1, "record": records[t]}
+    def model_for(self, season, method):
+        key = (season, method)
+        if key not in self.models:
+            _, ratings, games = load_season(season)
+            if method == "historical":
+                self.models[key] = historical_model(season)[0]
+            else:
+                self.models[key] = OutcomeModel.fit(games, ratings)
+        return self.models[key]
+
+    def bootstrap(self, season=DEFAULT_SEASON):
+        data, ratings, _ = load_season(season)
+        config = default_config(season)
+        model = self.model_for(season, config["probability_model"])
+        diagnostics = historical_model(season)[1] if config["probability_model"] == "historical" else None
+        ordered = sorted(ratings, key=lambda t: (-ratings[t], t))
+        records = {row[0]: row[2] for row in data["teams"]}
+        return {"config": config, "source": data["source"], "seasons": catalog(),
+                "teams": [{"name": t, "npi": ratings[t], "rank": i+1, "record": records[t],
+                           "history": team_history(t)}
                           for i, t in enumerate(ordered)],
-                "model": asdict(self.model), "report": self.reference}
+                "model": asdict(model), "model_diagnostics": diagnostics,
+                "rating_range": [min(ratings.values()), max(ratings.values())],
+                "report": self.reference if season == DEFAULT_SEASON else None}
+
+    def validate(self, raw):
+        season = raw.get("season", DEFAULT_SEASON) if isinstance(raw, dict) else DEFAULT_SEASON
+        _, ratings, _ = load_season(season)
+        return validate_config(raw, ratings)
 
     def explore(self, request):
         if not isinstance(request, dict):
             raise ValueError("Exploration needs an object")
         value = number(request.get("opponent_npi"), "Opponent NPI", 0, 100)
         raw = request.get("config", default_config())
+        season = raw.get("season", DEFAULT_SEASON) if isinstance(raw, dict) else DEFAULT_SEASON
+        data, ratings, _ = load_season(season)
         # A temporary real candidate lets the explorer accept an incomplete pool.
         config = dict(raw)
         fixed_names = {g.get("team") for g in config.get("fixed_games", []) if isinstance(g, dict)}
-        spare = next(t for t in self.ratings if t not in fixed_names and t != config.get("target_team", "Amherst"))
+        spare = next(t for t in ratings if t not in fixed_names and t != config.get("target_team", "Amherst"))
         config.update(mode="teams", candidates=[{"team": spare}], required=[], excluded=[], open_slots=1)
-        config, _ = validate_config(config, self.ratings)
-        target, fixed, _, _ = parse_plan(config, self.ratings)
-        model = replace(self.model, slope=self.model.slope*config["probability_slope_scale"])
-        strength = config.get("target_recent_npi", self.ratings[target])
+        config, _ = validate_config(config, ratings)
+        target, fixed, _, _ = parse_plan(config, ratings)
+        base_model = self.model_for(season, config["probability_model"])
+        model = replace(base_model, slope=base_model.slope*config["probability_slope_scale"])
+        strength = config.get("target_recent_npi", ratings[target])
         baseline_games = []
         assumptions = []
         for game in fixed:
-            probabilities = game.probabilities or model.predict(strength, self.ratings[game.team])
+            probabilities = game.probabilities or model.predict(strength, ratings[game.team])
             outcome = game.result or max(probabilities.as_items(), key=lambda row: row[1])[0]
-            baseline_games.append(SeasonGame(game.team, self.ratings[game.team], outcome))
+            baseline_games.append(SeasonGame(game.team, ratings[game.team], outcome))
             assumptions.append({"team": game.team, "result": outcome, "locked": game.result is not None})
         baseline = calculate_season_npi(baseline_games)
         def evaluate(npi):
@@ -168,10 +201,13 @@ class AppState:
         return {"opponent_npi": value, "baseline_npi": baseline.npi,
                 "outcomes": evaluate(value), "probabilities": asdict(model.predict(strength, value)),
                 "curve": [{"npi": npi, "outcomes": evaluate(npi)} for npi in range(30, 81)],
-                "assumptions": assumptions, "method": "fixed_ratings_modal_outcomes"}
+                "assumptions": assumptions, "method": "fixed_ratings_modal_outcomes", "season": season,
+                "rating_range": [min(ratings.values()), max(ratings.values())]}
 
     def start(self, raw, *, owner=None):
-        config, summary = validate_config(raw, self.ratings)
+        season = raw.get("season", DEFAULT_SEASON) if isinstance(raw, dict) else DEFAULT_SEASON
+        data, ratings, games = load_season(season)
+        config, summary = validate_config(raw, ratings)
         with self.lock:
             if self.active:
                 raise RuntimeError("A comparison is already running. Finish or cancel it first.")
@@ -179,7 +215,7 @@ class AppState:
                 del self.jobs[next(iter(self.jobs))]
             job_id = uuid4().hex
             job = {"id": job_id, "status": "running", "message": "Preparing division model", "progress": 0,
-                   "started": time.time(), "config": config, "summary": summary,
+                   "started": time.time(), "config": config, "summary": summary, "season": season,
                    "owner": owner, "cancel": threading.Event()}
             self.jobs[job_id] = job
             self.active = job_id
@@ -208,10 +244,11 @@ class AppState:
             with self.lock:
                 job.update(message=message, progress=level)
         try:
-            report = self.ranker(self.games, self.ratings, job["config"], progress=progress)
+            data, ratings, games = load_season(job["season"])
+            report = self.ranker(games, ratings, job["config"], progress=progress)
             if job["cancel"].is_set():
                 raise CalculationCancelled()
-            report["source"] = self.data["source"]
+            report["source"] = data["source"]
             with self.lock:
                 job.update(status="complete", progress=1, message="Comparison complete", report=report)
         except CalculationCancelled:
@@ -273,7 +310,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"error": "Only this local app may access the model"}, 403)
         path = urlparse(self.path).path
         if path == "/api/bootstrap":
-            return self.reply(self.state.bootstrap())
+            query = urlparse(self.path).query
+            season = next((part.split("=", 1)[1] for part in query.split("&") if part.startswith("season=")), DEFAULT_SEASON)
+            try:
+                return self.reply(self.state.bootstrap(season))
+            except ValueError as error:
+                return self.reply({"error": str(error)}, 400)
         if path == "/api/health":
             return self.reply({"status": "ok", "app": "ncaa-schedule-lab", "teams": len(self.state.ratings)})
         if path.startswith("/api/jobs/"):
@@ -304,7 +346,7 @@ class Handler(SimpleHTTPRequestHandler):
             data = json.loads(self.rfile.read(size), parse_constant=lambda _: (_ for _ in ()).throw(ValueError("Nonfinite JSON number")))
             path = urlparse(self.path).path
             if path == "/api/validate":
-                config, summary = validate_config(data, self.state.ratings)
+                config, summary = self.state.validate(data)
                 return self.reply({"config": config, **summary})
             if path == "/api/explore":
                 return self.reply(self.state.explore(data))

@@ -60,11 +60,19 @@ class TestAppState(unittest.TestCase):
 
     def test_bootstrap_exposes_only_needed_public_data_and_reference(self):
         data=self.state.bootstrap()
-        self.assertEqual(len(data['teams']),407)
-        self.assertEqual(data['source']['cutoff'],'2024-10-27')
+        self.assertEqual(len(data['teams']),402)
+        self.assertEqual(data['source']['cutoff'],'2025-11-09')
         self.assertEqual(data['config'],default_config())
         if data['report'] is not None:
             self.assertEqual(data['report']['config'],data['config'])
+        comparison=self.state.bootstrap('2024')
+        self.assertEqual(len(comparison['teams']),407)
+        self.assertEqual(comparison['source']['cutoff'],'2024-10-27')
+        self.assertEqual(data['model']['method'],'prior_season_out_of_time')
+        amherst=next(t for t in data['teams'] if t['name']=='Amherst')
+        self.assertEqual([row['season'] for row in amherst['history']],['2025','2024','2023','2022'])
+        with self.assertRaises(ValueError): self.state.bootstrap('../../private')
+        with self.assertRaises(ValueError): self.state.validate({'season':True})
 
     def test_explorer_matches_season_rule_at_bonus_threshold(self):
         config=default_config()

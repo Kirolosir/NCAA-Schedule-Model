@@ -1,8 +1,8 @@
 # NCAA Division III Men's Soccer NPI Schedule Model
 
 Schedule Lab compares nonconference schedules for Amherst men's soccer using
-the NCAA National Power Index. It simulates game outcomes and recalculates NPI
-across all 407 eligible teams in the October 27, 2024 dataset.
+the NCAA National Power Index. The app defaults to the November 9, 2025
+selection snapshot and can replay 2024, 2023, and 2022 for comparison.
 
 The calculations reproduce the published ratings within 0.001. Future game
 probabilities are estimates; the results depend on the input assumptions.
@@ -36,14 +36,23 @@ their means, P10–P90 season ranges, sampling uncertainty, and opponent risk/re
 The calculation can be cancelled; changing inputs marks older results as stale.
 Download results as full-precision JSON from the comparison panel.
 
-This remains a **2024 historical planning replay**, not a current-season forecast.
+Each view remains a **historical planning replay**, not a current-season forecast.
 Recent NPI inputs affect provisional pregame probabilities, not the fixed point
-of the historical schedule graph. Rating and ordinal rank are different scales.
-The real export's ratings span 35.321–62.061; higher rating bands have no real
-profiles to simulate. See the app's **Model & assumptions** view before using
-its rankings for decisions. Saved reference results are shown only when an
-existing local report matches the reference inputs and source hash; otherwise
-run a comparison to generate results.
+of the selected historical schedule graph. Rating and ordinal rank are different
+scales. The app shows the selected season's observed range and labels ratings
+outside it as arithmetic-only. See **Model & assumptions** before using a ranking.
+
+The 2025 and 2024 ratings are checked against NCAA-published NPI values. Division
+III NPI did not exist in 2023 or 2022, so those two ratings are clearly labeled
+retrospective reconstructions under the later rules. Seasons remain separate
+division graphs. Older results do not get pooled into the recursive NPI fixed
+point. They are used only to estimate game-outcome probabilities across time.
+
+The default 2025 probability model fits 2023 outcomes from 2022 ratings and 2024
+outcomes from 2023 ratings, then evaluates against held-out 2025 outcomes using
+2024 ratings. Its 2025 log loss is 0.9146, compared with 0.9147 for the latest
+training year alone and 1.0477 without team-strength information. The small
+multi-year improvement is reported as measured evidence, not automatic confidence.
 
 The loopback-only server serves only the built frontend, never the project
 directory. Plans and calculation jobs stay in memory; refreshing the browser
@@ -56,7 +65,8 @@ on this host. Installed accessible Shadcn/Base UI primitives are retained.
 Validation: the Python regression suite covers the real division and API logic;
 the frontend build type-checks TypeScript. HTTP smoke checks cover static assets,
 validation, exploration, a real comparison, cancellation, and origin restrictions.
-Browser interaction and visual checks have not been performed.
+Browser checks cover the season selector, published/retrospective labels, model
+diagnostics, the 2025 default, and the retained 2024 and 2023 views.
 
 ## Render deployment
 
@@ -82,7 +92,8 @@ about a minute to start again. Large comparisons may be slow on shared free
 compute. See [Render's free-service limits](https://render.com/docs/free).
 Automatic deploys are disabled so a source push cannot interrupt a coach's run.
 
-The image includes the reviewed division fixture, model code, and built frontend.
+The image includes the four reviewed division fixtures, the saved probability
+fit, model code, and built frontend.
 Raw Excel files, private inputs, local reports, credentials, and Git metadata are
 excluded from the build context. The production process runs as a non-root user.
 Host/origin checks, session ownership, and security headers are tested separately
@@ -244,6 +255,15 @@ set.
 
 ### Full-division source reconciliation
 
+The default fixture is the NCAA selection export dated November 9, 2025. Its
+402 rated teams and 3,528 eligible games all reconcile to the published records.
+Starting from the published ratings, constant 50, constant zero, or opponent win
+percentage produces the same stable vector within `1e-8`. The maximum difference
+from the published three-decimal ratings is `0.000498283`; the default opponent
+win-percentage seed converges in 377 iterations at tolerance `1e-10`.
+
+The 2024 fixture remains a separate published-NPI regression:
+
 The real-data fixture in
 `tests/data/ncaa_2024_10_27_division.json` combines the supplied official export
 with the archived NCAA daily Division III men's soccer scoreboards through
@@ -347,10 +367,10 @@ Small sample counts check the workflow, not the reliability of the ordering.
 ### Opponent strength
 
 The demonstration is a **historical planning replay**, not a 2026 forecast. All
-other teams' games/results come from the verified October 27, 2024 graph. Amherst's
+other teams' games/results come from the selected season graph. Amherst's
 old games are removed from both sides and replaced by the proposed slate.
 Adding a game changes the opponent's schedule too, and every scenario reconverges
-all 407 teams. We do not know which other game the opponent might remove to make
+every listed team. We do not know which other game the opponent might remove to make
 room; their other historical games are held fixed.
 
 Ten conference opponents are fixed by default: Bates, Bowdoin, Colby, Connecticut
@@ -374,17 +394,17 @@ only an NPI number has no schedule profile in the division graph and is rejected
 
 ### Outcome probabilities
 
-The provisional outcome model is fitted to the real 3,137-game graph. Let
+The outcome model uses prior-season ratings for the 2024 and 2025 views. Let
 `d = (team NPI - opponent NPI) / 10`. Win, tie, and loss probabilities are the
 normalized exponentials of `(b*d/2, a, -b*d/2)`. Swapping teams swaps win and loss
 probabilities, while preserving the tie probability.
 
-This fit uses end-period ratings that contain those same results. Its training
-and retrospective holdout log-loss metrics therefore have **rating leakage**;
-they are not evidence of prospective forecast accuracy. The default strength
-coefficient is multiplied by `0.5` to soften this strong retrospective relationship.
-That is an explicit heuristic, not a calibrated confidence interval. Coach-supplied
-probabilities or pregame ratings from held-out seasons are preferable.
+Each training row uses a rating snapshot from the previous season. The newest
+season is held out from fitting. For 2025, older transitions receive 0.75 weight
+per game and the latest transition receives 1.0. That recency choice is disclosed
+and tested; it does not shrink the reported outcome range. The 2023 and 2022 views
+fall back to a same-season retrospective fit because no earlier reconstructed
+graph is included. Coach-supplied probabilities can replace either fit.
 
 For each sampled season:
 
@@ -515,11 +535,14 @@ probabilities on entirely held-out seasons and model division-wide future outcom
 | Module | Responsibility |
 |---|---|
 | `outcome_model.py` | Transparent provisional win/tie/loss probability fit |
+| `temporal_model.py` | Prior-season training and out-of-time evaluation |
+| `seasons.py` | Validated season registry and team history |
 | `planning.py` | Real graph loading, editable defaults, named and band inputs |
 | `fast_division.py` | Allocation-light version of the verified simultaneous solver |
 | `schedule_optimizer.py` | Full-division sampling, paired ranking and conditional impacts |
 | `planning_report.py` | Human-readable output; display rounding only |
 | `tests/test_schedule_optimizer.py` | Real-data solver equivalence, probabilities, input safeguards, ranking and sensitivity mechanics |
+| `tests/test_seasons.py` | 2025 published convergence, historical record reconciliation, and temporal holdout checks |
 
 The fast solver reproduces every reference rating **exactly** on the unchanged
 407-team graph at `1e-10`, including the 83 iterations from published seeds. Tests

@@ -16,12 +16,13 @@ from npi_model.schedule_optimizer import (
     ScheduleEvaluator, _draw, _uniforms, rank_schedules, risk_reward, summarize,
 )
 from npi_model.schedule_simulator import OutcomeProbabilities
+from npi_model.seasons import season_path
 
 
 class RealDataCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.data, cls.ratings, cls.games = load_graph()
+        cls.data, cls.ratings, cls.games = load_graph(season_path("2024"))
 
 
 class TestFastDivision(RealDataCase):
@@ -84,7 +85,7 @@ class TestOutcomeModel(RealDataCase):
 
 class TestPlanningInputs(RealDataCase):
     def test_default_real_pool_and_rating_band_scope(self):
-        target, fixed, candidates, bands = parse_plan(default_config(), self.ratings)
+        target, fixed, candidates, bands = parse_plan(default_config("2024"), self.ratings)
         self.assertEqual(target, "Amherst")
         self.assertEqual(len(fixed), 10)
         self.assertTrue(all(g.result is None for g in fixed))
@@ -111,7 +112,7 @@ class TestPlanningInputs(RealDataCase):
         self.assertEqual(len(representatives(names, 3)), 3)
 
     def test_banded_mode_generates_named_graph_profiles(self):
-        config = default_config()
+        config = default_config("2024")
         config.update(mode="bands", band_scale="rank")
         _, _, candidates, bands = parse_plan(config, self.ratings)
         self.assertEqual({c.team for c in candidates},
@@ -119,7 +120,7 @@ class TestPlanningInputs(RealDataCase):
         self.assertTrue(all(b["member_count"] for b in bands))
 
     def test_specific_recent_rating_and_locked_result(self):
-        config = default_config()
+        config = default_config("2024")
         config["candidates"][0]["recent_npi"] = 52.123456789
         config["candidates"][0]["probabilities"] = {"win": .4, "tie": .2, "loss": .4}
         config["fixed_games"][0]["result"] = "tie"
@@ -135,7 +136,7 @@ class TestPlanningInputs(RealDataCase):
                       {"candidates": [{"team": "Babson", "recent_npi": 101}]},
                       {"target_recent_npi": float("nan")},
                       {"excluded": ["Unknown school"]}):
-            config = default_config()
+            config = default_config("2024")
             config.update(patch)
             with self.assertRaises(ValueError):
                 parse_plan(config, self.ratings)
@@ -208,7 +209,7 @@ class TestScheduleScoring(RealDataCase):
                          different.sample(("Babson",), samples=2, seed=1, forced={"Babson": "win"}))
 
     def test_real_end_to_end_ranking_and_serialization(self):
-        config = default_config()
+        config = default_config("2024")
         config.update(fixed_games=[{"team": t, "result": r} for t, r in self.historical if t != "Babson"],
                       candidates=[{"team": t, "probabilities": {"win": 1.0, "tie": 0.0, "loss": 0.0}}
                                   for t in ("Babson", "Springfield")],
@@ -225,7 +226,7 @@ class TestScheduleScoring(RealDataCase):
         self.assertEqual(json.loads(json.dumps(report, allow_nan=False))["top_schedules"][0]["projection"],
                          first["projection"])
         text = render_report(report)
-        self.assertIn("not forecast accuracy metrics", text)
+        self.assertIn("holdout outcomes did not enter fitting", text)
         self.assertIn("not mathematical bounds", text)
         self.assertIn("Win lift", text)
         config["max_combinations"] = 1

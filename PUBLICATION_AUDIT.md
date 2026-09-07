@@ -1,6 +1,6 @@
 # Publication review
 
-Reviewed September 6, 2026.
+Reviewed September 7, 2026.
 
 ## Repository status
 
@@ -25,8 +25,9 @@ environment files, private keys, credential/secret JSON filenames, `local_data/`
 `planning_inputs/`, `reports/`, installed frontend dependencies, build output,
 and TypeScript caches. No tracked file matches the current ignore rules.
 
-The two tracked JSON fixtures contain public team names, ratings, records, game
-dates/results, source URLs, and provenance hashes. They contain no coach
+The tracked JSON fixtures contain public team names, ratings, records, game
+dates/results, source URLs, and provenance hashes. The saved probability artifact
+contains fitted coefficients and aggregate diagnostics. They contain no coach
 correspondence, private plans, player-level personal data, or credentials.
 Redistribution rights and a public code license still need review.
 
@@ -46,8 +47,8 @@ except for removal of the unused build integration.
 
 ## Hosted deployment
 
-The Render image contains model code, the reviewed division fixture, and compiled
-frontend assets. An allowlist-based build context excludes private inputs, raw
+The Render image contains model code, four reviewed division fixtures, the saved
+probability fit, and compiled frontend assets. An allowlist-based build context excludes private inputs, raw
 workbooks, reports, Git metadata, and local backups. No service credentials are
 stored in source. Session-signing material is generated in memory at startup.
 
@@ -56,17 +57,37 @@ browser sessions; there is no user login or database. The tests verify ownership
 checks, cross-origin rejection, input limits, and restricted file access.
 A single Gunicorn worker preserves the in-memory queue. The configured plan is
 free, with automatic deploys disabled. The service went live on September 6, 2026
-at https://ncaa-schedule-lab.onrender.com. The production page, assets, 407-team
+at https://ncaa-schedule-lab.onrender.com. The prior production page, assets, 407-team
 data, full-precision explorer, and session ownership checks passed over HTTPS.
 An end-to-end Babson comparison completed 62 full-division solves in 247 seconds
 on free compute. Its projected mean, 59.98540286883173, matched the local result
 within 1e-10. This was a deployment check with two draws, not a reliable forecast.
 
-## Proposed source snapshot
+## Multi-season update
 
-These 118 files form the cleaned source snapshot under the existing ignore
-rules. Deleted setup files, private inputs, backups, and generated output are
-excluded. Recheck the list if files change before publication.
+The November 9, 2025 selection snapshot is now the default. All 402 published
+team records reconcile, and division convergence stays within 0.001 from multiple
+starting seeds. The 2024 official fixture remains available. The 2023 and 2022
+fixtures are labeled retrospective because NPI was not the Division III selection
+metric in those seasons. One NCAA source discrepancy is preserved explicitly:
+Earlham's 2022 ranking table says 4-12-1, while its team schedule has 16 distinct
+games totaling 3-12-1 and the daily archive duplicates the Asbury game.
+
+The probability fit uses prior-season ratings and an out-of-time holdout. The
+2025 holdout log loss is 0.914627, compared with 0.914651 using the latest
+training transition alone and 1.047667 for the no-strength baseline. This small
+improvement supports retaining the older transition; it is not described as a
+general confidence guarantee.
+
+Raw Excel exports and downloaded pages remain ignored. The Docker allowlist
+includes only the reviewed fixtures and aggregate fit, not `local_data/`, raw
+workbooks, reports, coach inputs, Git metadata, or environment files.
+
+## Earlier source snapshot
+
+This September 6 list records the source before the multi-season update. It is
+retained as an audit trail and is not the current deployment manifest. Deleted
+setup files, private inputs, backups, and generated output were excluded.
 
 ```text
 .dockerignore

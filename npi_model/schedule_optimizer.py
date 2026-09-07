@@ -11,6 +11,7 @@ from .division_npi import DivisionGame
 from .fast_division import CompiledDivision
 from .game_value import calculate_game_value
 from .outcome_model import OutcomeModel
+from .temporal_model import planning_model
 from .planning import Candidate, parse_plan
 from .season_npi import SeasonGame, calculate_season_npi
 
@@ -179,8 +180,8 @@ def rank_schedules(games, ratings, config, *, progress=None):
     if total > config["max_combinations"]:
         raise ValueError(f"{total} combinations exceeds max_combinations; narrow the pool or raise the limit")
     if progress:
-        progress(f"Fitting provisional probabilities to {len(games)} historical games")
-    fitted = OutcomeModel.fit(games, ratings)
+        progress("Loading outcome probabilities and division graph")
+    fitted = planning_model(games, ratings, config)
     model = replace(fitted, slope=fitted.slope*scale)
     extra_names = {t for b in bands for t in b["representatives"]}-names
     extras = [Candidate(t, ratings[t]) for t in sorted(extra_names)]
@@ -232,6 +233,9 @@ def rank_schedules(games, ratings, config, *, progress=None):
         standalone.extend(risk_reward(evaluator, (t,), samples=config["insight_samples"], seed=seed+3000003))
         if progress:
             progress(f"Evaluated standalone risk/reward: {t}")
+    probability_note = ("Probability fitting uses earlier-season ratings to predict later-season results. The newest season is held out from fitting."
+                        if fitted.method == "prior_season_out_of_time" else
+                        "Probability fitting uses same-period end ratings, including the outcomes being fitted. It is a retrospective comparison, not prospective validation.")
     return {
         "config": config, "target_team": target,
         "background": {"teams": len(ratings), "games": len(games), "rating_min": min(ratings.values()),
@@ -251,8 +255,8 @@ def rank_schedules(games, ratings, config, *, progress=None):
             "Default candidates are historical/reference examples; availability, travel and dates are unverified.",
             "Fixed means opponent locked; outcomes remain uncertain unless result is supplied. All nonconference decisions are open by default.",
             "Recent NPI overrides affect pregame probabilities only. The historical result graph determines converged NPI; changing an iteration seed cannot change a fixed point.",
-            "Probability fitting uses same-period end ratings, including the outcomes being fitted. Even holdout diagnostics leak rating information and are not prospective validation.",
-            "Default slope_scale=0.5 is a disclosed conservative planning assumption, not a calibrated uncertainty estimate. Override probabilities or vary this setting.",
+            probability_note,
+            f"Probability slope scale={scale} is a planning sensitivity, not a calibrated uncertainty estimate. Override probabilities or vary this setting.",
             "Game outcomes are conditionally independent; no injury, roster, travel, date, or common team-form uncertainty is modeled.",
             "P10–P90 describes simulated season spread. Mean CI95 describes Monte Carlo error conditional on the model; neither includes model uncertainty.",
             "All-win/all-loss are stress scenarios, not proven global NPI extrema. Screening ranks all allowed combinations; independent validation covers only the displayed shortlist.",

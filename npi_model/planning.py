@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .division_npi import DivisionGame
 from .schedule_simulator import OutcomeProbabilities
+from .seasons import DEFAULT_SEASON, season_path
 
 
 DEFAULT_BANDS = (("sub-40", None, 40), ("40-55", 40, 55),
@@ -15,7 +16,7 @@ CONFERENCE = ("Bates", "Bowdoin", "Colby", "Connecticut Col.", "Hamilton",
               "Middlebury", "Trinity (CT)", "Tufts", "Wesleyan (CT)", "Williams")
 DEFAULT_POOL = ("Suffolk", "WPI", "Babson", "Manhattanville", "Emerson",
                 "Springfield", "Western New Eng.")
-DEFAULT_GRAPH = Path(__file__).resolve().parents[1]/"tests/data/ncaa_2024_10_27_division.json"
+DEFAULT_GRAPH = season_path(DEFAULT_SEASON)
 
 
 @dataclass(frozen=True)
@@ -66,8 +67,11 @@ def representatives(members, count=2):
     return [members[round(i*(len(members)-1)/(count-1))] for i in range(count)]
 
 
-def default_config():
+def default_config(season=DEFAULT_SEASON):
+    season_path(season)
     return {
+        "season": season,
+        "probability_model": "historical" if season in ("2024", "2025") else "retrospective",
         "target_team": "Amherst", "mode": "teams", "band_scale": "rating",
         "fixed_games": [{"team": team, "category": "conference"} for team in CONFERENCE],
         "candidates": [{"team": team} for team in DEFAULT_POOL],
@@ -76,7 +80,7 @@ def default_config():
         "representatives_per_band": 2, "open_slots": 5, "required": [],
         "excluded": [], "samples": 24, "validation_samples": 64,
         "insight_samples": 8, "top_n": 3, "seed": 20241027,
-        "max_combinations": 500, "probability_slope_scale": 0.5,
+        "max_combinations": 500, "probability_slope_scale": 1.0 if season in ("2024", "2025") else 0.5,
         "convergence_tolerance": 1e-8,
     }
 

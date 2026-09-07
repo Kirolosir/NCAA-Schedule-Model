@@ -1,0 +1,108 @@
+{
+  "2024": {
+    "model": {
+      "slope": 3.3275222778320312,
+      "tie_log_weight": -0.5358238220214844,
+      "sample_count": 3494,
+      "fit_log_loss": 0.8816867963535299,
+      "constant_baseline_log_loss": 1.0455103568806998,
+      "retrospective_holdout_log_loss": null,
+      "rating_min": 35.321,
+      "rating_max": 62.061,
+      "method": "prior_season_out_of_time",
+      "training_seasons": [
+        "2023"
+      ],
+      "holdout_season": "2024",
+      "out_of_time_log_loss": 0.8701374485373996
+    },
+    "diagnostics": {
+      "training": [
+        {
+          "predictor_season": "2022",
+          "predictor_cutoff": "2022-12-04",
+          "outcome_season": "2023",
+          "games": 3494,
+          "excluded_new_teams_games": 84,
+          "weight_per_game": 1.0
+        }
+      ],
+      "holdout": {
+        "predictor_season": "2023",
+        "predictor_cutoff": "2023-12-03",
+        "outcome_season": "2024",
+        "games": 3078,
+        "excluded_new_teams_games": 59,
+        "weight_per_game": 1.0
+      },
+      "holdout_log_loss": 0.8701374485373996,
+      "constant_holdout_log_loss": 1.0359049541130885,
+      "recent_only_holdout_log_loss": 0.8701374485373996,
+      "recency_decay": 0.75,
+      "note": "Lower log loss is better. Holdout outcomes never enter fitting. Recency weighting is a planning choice, not a confidence guarantee; uncertainty intervals remain conditional on the model."
+    },
+    "source_hashes": {
+      "2022": "ed4ffc84873da64993e901a49bbfc0bc994fcf509043a703cebbc5058a740b97",
+      "2023": "65fa232951142c48feac2b9d8a6ea613707ccd03ae74e23d4a6be1562cb26e6c",
+      "2024": "b43bfb9a5ad799037f7691e4ae45c0e463612b8bb297efcdc126f743f2f0c442"
+    }
+  },
+  "2025": {
+    "model": {
+      "slope": 3.2710609436035156,
+      "tie_log_weight": -0.5806026458740234,
+      "sample_count": 6572,
+      "fit_log_loss": 0.8753080338962094,
+      "constant_baseline_log_loss": 1.040173526772115,
+      "retrospective_holdout_log_loss": null,
+      "rating_min": 33.011,
+      "rating_max": 62.667,
+      "method": "prior_season_out_of_time",
+      "training_seasons": [
+        "2023",
+        "2024"
+      ],
+      "holdout_season": "2025",
+      "out_of_time_log_loss": 0.9146273455533579
+    },
+    "diagnostics": {
+      "training": [
+        {
+          "predictor_season": "2022",
+          "predictor_cutoff": "2022-12-04",
+          "outcome_season": "2023",
+          "games": 3494,
+          "excluded_new_teams_games": 84,
+          "weight_per_game": 0.75
+        },
+        {
+          "predictor_season": "2023",
+          "predictor_cutoff": "2023-12-03",
+          "outcome_season": "2024",
+          "games": 3078,
+          "excluded_new_teams_games": 59,
+          "weight_per_game": 1.0
+        }
+      ],
+      "holdout": {
+        "predictor_season": "2024",
+        "predictor_cutoff": "2024-10-27",
+        "outcome_season": "2025",
+        "games": 3528,
+        "excluded_new_teams_games": 0,
+        "weight_per_game": 1.0
+      },
+      "holdout_log_loss": 0.9146273455533579,
+      "constant_holdout_log_loss": 1.0476673095645836,
+      "recent_only_holdout_log_loss": 0.9146514564642642,
+      "recency_decay": 0.75,
+      "note": "Lower log loss is better. Holdout outcomes never enter fitting. Recency weighting is a planning choice, not a confidence guarantee; uncertainty intervals remain conditional on the model."
+    },
+    "source_hashes": {
+      "2022": "ed4ffc84873da64993e901a49bbfc0bc994fcf509043a703cebbc5058a740b97",
+      "2023": "65fa232951142c48feac2b9d8a6ea613707ccd03ae74e23d4a6be1562cb26e6c",
+      "2024": "b43bfb9a5ad799037f7691e4ae45c0e463612b8bb297efcdc126f743f2f0c442",
+      "2025": "8b69665ce45507713539ea3a1513d72cebd8b3e023e24adb97d13c5bc9d78a42"
+    }
+  }
+}

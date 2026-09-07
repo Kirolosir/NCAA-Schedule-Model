@@ -18,6 +18,7 @@ def main() -> None:
 
     subparsers.add_parser("planning-config", help="print editable default planning JSON")
     planning = subparsers.add_parser("plan", help="rank schedules by simulated division NPI")
+    planning.add_argument("--season", choices=("2025", "2024", "2023", "2022"), help="historical division dataset")
     planning.add_argument("--config", type=Path, help="JSON inputs; omitted uses documented defaults")
     planning.add_argument("--graph", type=Path, help="replacement division fixture with the same schema")
     planning.add_argument("--mode", choices=("teams", "bands"))
@@ -42,12 +43,16 @@ def main() -> None:
         from .planning import default_config
         print(json.dumps(default_config(), indent=2))
     elif args.command == "plan":
-        from .planning import DEFAULT_GRAPH, default_config, load_graph
+        from .planning import default_config, load_graph
         from .planning_report import render_report
         from .schedule_optimizer import rank_schedules
-        config = default_config()
-        if args.config:
-            config.update(json.loads(args.config.read_text()))
+        from .seasons import DEFAULT_SEASON, season_path
+        supplied = json.loads(args.config.read_text()) if args.config else {}
+        if args.season:
+            supplied["season"] = args.season
+        season = supplied.get("season", DEFAULT_SEASON)
+        config = default_config(season)
+        config.update(supplied)
         for arg, key in (("mode", "mode"), ("band_scale", "band_scale"),
                          ("samples", "samples"), ("validation_samples", "validation_samples"),
                          ("insight_samples", "insight_samples"), ("top", "top_n"),
@@ -60,7 +65,7 @@ def main() -> None:
         if not args.overwrite and (json_path.exists() or md_path.exists()):
             parser.error("report exists; choose a new --output or explicitly pass --overwrite")
         try:
-            data, ratings, games = load_graph(args.graph or DEFAULT_GRAPH)
+            data, ratings, games = load_graph(args.graph or season_path(season))
             report = rank_schedules(games, ratings, config,
                                     progress=lambda msg: print(msg, file=sys.stderr, flush=True))
             report["source"] = data["source"]

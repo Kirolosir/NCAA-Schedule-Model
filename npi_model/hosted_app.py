@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.exceptions import HTTPException
 
-from .app_server import AppState, ROOT, validate_config
+from .app_server import AppState, ROOT
 
 
 def create_app(*, state=None, public_origin=None):
@@ -66,7 +66,10 @@ def create_app(*, state=None, public_origin=None):
 
     @app.get("/api/bootstrap")
     def bootstrap():
-        data = model.bootstrap()
+        try:
+            data = model.bootstrap(request.args.get("season", "2025"))
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
         data["config"].update(samples=4, validation_samples=8, insight_samples=2)
         data.update(report=None, deployment={"hosted": True, "max_job_minutes": 20})
         return jsonify(data)
@@ -83,7 +86,7 @@ def create_app(*, state=None, public_origin=None):
         try:
             raw = read_json()
             if action == "validate":
-                config, summary = validate_config(raw, model.ratings)
+                config, summary = model.validate(raw)
                 return jsonify(config=config, **summary)
             if action == "explore":
                 return jsonify(model.explore(raw))

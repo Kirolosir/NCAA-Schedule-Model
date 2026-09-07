@@ -7,6 +7,10 @@
 !tests/
 !tests/data/
 !tests/data/ncaa_2024_10_27_division.json
+!tests/data/ncaa_2025_11_09_division.json
+!tests/data/ncaa_2023_historical_division.json
+!tests/data/ncaa_2022_historical_division.json
+!tests/data/historical_probability_models.json
 !web/
 !web/**
 web/node_modules/

@@ -15,8 +15,8 @@ def _probabilities(d, slope, tie_log_weight):
 
 
 def _loss(rows, slope, tie):
-    return fsum(-log(max(_probabilities(d, slope, tie)[y], 1e-300))
-                for d, y in rows)/len(rows)
+    return fsum(-(row[2] if len(row) == 3 else 1)*log(max(_probabilities(row[0], slope, tie)[row[1]], 1e-300))
+                for row in rows)/fsum(row[2] if len(row) == 3 else 1 for row in rows)
 
 
 def _fit(rows):
@@ -43,9 +43,13 @@ class OutcomeModel:
     sample_count: int
     fit_log_loss: float
     constant_baseline_log_loss: float
-    retrospective_holdout_log_loss: float
+    retrospective_holdout_log_loss: float | None
     rating_min: float
     rating_max: float
+    method: str = "same_period_retrospective"
+    training_seasons: tuple[str, ...] = ()
+    holdout_season: str | None = None
+    out_of_time_log_loss: float | None = None
 
     @classmethod
     def fit(cls, games, ratings):
