@@ -1,554 +1,148 @@
-# NCAA Division III Men's Soccer NPI Schedule Model
+# NCAA Division III Men's Soccer Schedule Lab
 
-Schedule Lab compares nonconference schedules for Amherst men's soccer using
-the NCAA National Power Index. The app defaults to the November 9, 2025
-selection snapshot and can replay 2024, 2023, and 2022 for comparison.
+Schedule Lab compares possible five-game nonconference schedules for Amherst
+men's soccer. The ten NESCAC games stay fixed. Each proposed schedule is scored
+by projecting wins, ties, and losses, then recalculating NPI across the whole
+Division III schedule graph.
 
-The calculations reproduce the published ratings within 0.001. Future game
-probabilities are estimates; the results depend on the input assumptions.
+[Open the hosted app](https://ncaa-schedule-lab.onrender.com)
 
-## Interactive Schedule Lab
+This is a planning tool, not a prediction guarantee. Opponent availability,
+travel, injuries, roster changes, and future form are not modeled.
 
-Double-click **Start Schedule Lab.command**, or run:
+## What the app does
+
+- Compares named opponents or NPI/rank bands.
+- Shows the effect of a win, tie, or loss against one opponent.
+- Ranks five-game schedules by projected season NPI.
+- Shows a likely range so a risky schedule does not look safer than it is.
+- Keeps 2025, 2024, 2023, and 2022 as separate historical reference seasons.
+- Uses full precision internally and rounds only for display.
+
+The 2025 and 2024 seasons use published NCAA NPI values. NPI was not used for
+Division III selection in 2023 or 2022, so those seasons are retrospective
+reconstructions under the later rules.
+
+## Run locally
+
+Requirements: Python 3.11+, Node.js 22.13+, and npm.
+
+On macOS, double-click `Start Schedule Lab.command`. To start it manually:
 
 ```bash
+cd web
+npm ci
+npm run build
+cd ..
 python3 scripts/launch_app.py
 ```
 
-The app opens at `http://127.0.0.1:8765`. On a fresh checkout, install the
-frontend dependencies first with `cd web && npm ci` (Node.js 22.13+ and npm).
-The launcher builds the frontend if needed; subsequent launches reuse it.
-After changing frontend source, run `npm run build` from `web/` and refresh.
-The model/API uses only Python's standard library. No account, credentials,
-remote repository, or hosted service is needed.
+The app opens at `http://127.0.0.1:8765`.
 
-Start with **Opponent explorer**: select a real team or enter a rating to see
-the separate win/tie/loss impacts against the conference slate. This instant
-view holds opponent ratings fixed and uses the most probable unlocked conference
-outcomes; it is a diagnostic, not a division-wide forecast.
-
-In **Schedule planner**, add named candidates, click their names to edit recent
-ratings or outcome probabilities, or switch to rating/rank bands. Check the
-candidates to include and pin any must-play games. Set the open slots and
-simulation detail, then choose **Compare schedules**. Every sampled season
-converges the full division. Click the resulting schedule cards to compare
-their means, P10–P90 season ranges, sampling uncertainty, and opponent risk/reward.
-The calculation can be cancelled; changing inputs marks older results as stale.
-Download results as full-precision JSON from the comparison panel.
-
-Each view remains a **historical planning replay**, not a current-season forecast.
-Recent NPI inputs affect provisional pregame probabilities, not the fixed point
-of the selected historical schedule graph. Rating and ordinal rank are different
-scales. The app shows the selected season's observed range and labels ratings
-outside it as arithmetic-only. See **Model & assumptions** before using a ranking.
-
-The 2025 and 2024 ratings are checked against NCAA-published NPI values. Division
-III NPI did not exist in 2023 or 2022, so those two ratings are clearly labeled
-retrospective reconstructions under the later rules. Seasons remain separate
-division graphs. Older results do not get pooled into the recursive NPI fixed
-point. They are used only to estimate game-outcome probabilities across time.
-
-The default 2025 probability model fits 2023 outcomes from 2022 ratings and 2024
-outcomes from 2023 ratings, then evaluates against held-out 2025 outcomes using
-2024 ratings. Its 2025 log loss is 0.9146, compared with 0.9147 for the latest
-training year alone and 1.0477 without team-strength information. The small
-multi-year improvement is reported as measured evidence, not automatic confidence.
-
-The loopback-only server serves only the built frontend, never the project
-directory. Plans and calculation jobs stay in memory; refreshing the browser
-resets inputs. Logs and local reports are ignored by Git. For development,
-run `python3 -m npi_model.app_server` from the project root and `npm run dev`
-from `web/`; Vite proxies API requests to the Python model. The local build
-uses Tailwind's pure-JavaScript compiler because the native CSS adapter stalled
-on this host. Installed accessible Shadcn/Base UI primitives are retained.
-
-Validation: the Python regression suite covers the real division and API logic;
-the frontend build type-checks TypeScript. HTTP smoke checks cover static assets,
-validation, exploration, a real comparison, cancellation, and origin restrictions.
-Browser checks cover the season selector, published/retrospective labels, model
-diagnostics, the 2025 default, and the retained 2024 and 2023 views.
-
-## Render deployment
-
-Live app: [Schedule Lab](https://ncaa-schedule-lab.onrender.com).
-
-The repository includes `render.yaml` for a free Docker web service. In Render,
-the existing service is `ncaa-schedule-lab` in the `NCAA Schedule Model` project.
-To create another instance, use a Blueprint from this repository and select `main`.
-The Docker build
-compiles the frontend and runs the Python API with Gunicorn. The public address
-comes from Render's `RENDER_EXTERNAL_URL`; no API key or model service is needed.
-For another host, set `PUBLIC_ORIGIN` to the full HTTPS origin and provide `PORT`.
-
-The hosted app is a public demo with session-separated results, not a private
-login-protected site. A signed, secure cookie limits access to each browser's
-jobs. The server keeps at most eight jobs in memory and runs one comparison at
-a time. Jobs stop at the next progress update after twenty minutes. Reloads,
-restarts, and free-service sleep can lose results; export anything worth keeping.
-The app starts with Quick exploration settings on the hosted version.
-
-Render's free service sleeps after fifteen minutes without traffic and can take
-about a minute to start again. Large comparisons may be slow on shared free
-compute. See [Render's free-service limits](https://render.com/docs/free).
-Automatic deploys are disabled so a source push cannot interrupt a coach's run.
-
-The image includes the four reviewed division fixtures, the saved probability
-fit, model code, and built frontend.
-Raw Excel files, private inputs, local reports, credentials, and Git metadata are
-excluded from the build context. The production process runs as a non-root user.
-Host/origin checks, session ownership, and security headers are tested separately
-from the mathematical model. No account registration or persistent storage is added.
-
-Install the hosted dependencies and run the full tests with:
+For frontend development, run the API and Vite in separate terminals:
 
 ```bash
-python -m pip install -r requirements.txt
-python -m unittest discover -s tests -v
+python3 -m npi_model.app_server
 ```
 
-Use exactly one Gunicorn worker while jobs are stored in memory. Multiple workers
-would have independent queues and sessions; horizontal scaling needs a shared job
-store first.
+```bash
+cd web
+npm run dev
+```
 
-## Single-game value
+## NPI rules used
 
-For a win, the result value is 100; for a loss, it is 0.
+For one game:
 
 ```text
 base value = 0.15 × result value + 0.85 × opponent NPI
-
 quality win bonus = 0.75 × (opponent NPI − 54)
-                    only for a win when opponent NPI > 54
-
-game value = base value + quality win bonus
 ```
 
-The calculator returns each component and the total without rounding.
+The result value is 100 for a win and 0 for a loss. The bonus only applies to a
+win over an opponent above 54 NPI. A tie is split into half of a win component
+and half of a loss component.
 
-## Set up
+Season NPI is not a simple average. Win and loss components are sorted by game
+value. Lowering wins must be retained until the team reaches ten retained
+win-equivalents; after that, they can be excluded. A loss can be excluded when
+keeping it would raise the rating. Winless teams use 85% of their lowest-rated
+opponent's NPI.
 
-The Python model requires Python 3.11 or later and has no third-party runtime
-dependencies.
+Because every opponent's rating also depends on its opponents, the division
+solver updates every team simultaneously until the largest change is below the
+convergence tolerance.
+
+## Historical data
+
+The reviewed fixtures are stored in `tests/data/`:
+
+| File | Use |
+|---|---|
+| `ncaa_2025_11_09_division.json` | 2025 selection-day division snapshot |
+| `ncaa_2024_10_27_division.json` | 2024 published NPI snapshot |
+| `ncaa_2023_historical_division.json` | 2023 retrospective reconstruction |
+| `ncaa_2022_historical_division.json` | 2022 retrospective reconstruction |
+| `historical_probability_models.json` | Saved cross-season outcome fit |
+
+Raw Excel exports are intentionally ignored. The JSON fixtures contain public
+team names, ratings, records, dates, results, source URLs, and provenance hashes.
+They do not contain coach correspondence, private schedules, player information,
+credentials, or secrets.
+
+The 2025 fixture contains 402 rated teams and 3,528 eligible games. The division
+solver reproduces every published NPI within 0.001 from several starting seeds.
+The season aggregation tests also cover winning, losing, tied, and winless teams.
+
+Older seasons are not mixed into the recursive NPI calculation. They are used to
+estimate game-outcome probabilities. The newest season remains an out-of-time
+check rather than part of the probability fitting sample.
+
+## Comparison modes
+
+- **Quick** screens the pool with short division passes, then fully converges the
+  finalists. This is the default for trying ideas.
+- **Standard** uses a larger sample and shortlist.
+- **Thorough** fully evaluates the widest set and is intended for a final review.
+
+The instant opponent explorer holds the rest of the division fixed. Final
+schedule projections always run through division-wide convergence. Individual
+game effects should not be added together because NPI is recursive and the
+season aggregation can exclude some results.
+
+## Tests
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
 python -m unittest discover -s tests -v
+cd web && npm run build
 ```
 
-Run a calculation from the command line:
+The tests cover the game formula, season aggregation, division convergence,
+schedule simulation, ranking, all four historical seasons, API validation,
+session isolation, cancellation, and hosted security checks.
 
-```bash
-python -m npi_model game --result win --opponent-npi 55
-```
+## Deployment
 
-Expected breakdown:
+`render.yaml` and `Dockerfile` define the Render service. The production process
+uses one Gunicorn worker because calculation jobs are kept in memory. Automatic
+deploys are disabled so a push cannot interrupt a coach's active comparison.
+
+The hosted version has no login or persistent database. Results belong to one
+signed browser session and disappear after a service restart. Export any result
+that needs to be kept. Render's free service may also take about a minute to wake
+after being idle.
+
+Private planning inputs belong in `planning_inputs/`, generated reports in
+`reports/`, and other local source material in `local_data/`. Those directories,
+Excel files, environment files, credentials, dependencies, caches, and builds are
+excluded by Git and the Docker build context.
+
+## Project layout
 
 ```text
-Result component:       15.000
-Opponent NPI component: 46.750
-Quality win bonus:      0.750
-Game value:             62.500
+npi_model/   NPI calculation, simulation, optimization, and API
+scripts/     data import, historical rebuild, and local launcher
+tests/       regression tests and reviewed historical fixtures
+web/         React interface
+examples/    sample planner inputs
 ```
-
-### Example values and precision
-
-Using the rounded opponent NPIs in the examples:
-
-| Result | Opponent NPI | Calculation | Game value |
-|---|---:|---|---:|
-| Loss | 66.0 | `0 + 0.85 × 66` | 56.100 |
-| Win | 51.5 | `15 + 0.85 × 51.5` | 58.775 |
-| Win | 55.0 | `15 + 0.85 × 55 + 0.75 × 1` | 62.500 |
-
-The first two differ slightly from 56.08 and 58.757 because the opponent NPIs
-were described approximately. Those observed values imply unrounded opponent
-NPIs of about 65.9765 and 51.4788, respectively. Calculations use full precision;
-rounding applies only to displayed values.
-
-The arithmetic and schedule-forecasting code are in separate modules.
-
-## Team-season aggregation
-
-The NCAA does not simply average every game. Each result becomes one or two
-weighted components:
-
-| Result | Win component | Loss component |
-|---|---:|---:|
-| Win | 1.0 | 0.0 |
-| Loss | 0.0 | 1.0 |
-| Tie | 0.5 | 0.5 |
-
-The win and loss halves of a tie are evaluated independently. The win half uses
-the same win value and quality-win bonus as a full win, but at half weight. The
-loss half uses the normal loss value at half weight.
-
-Aggregation proceeds as follows:
-
-1. Sort win components and loss components separately from highest unit game
-   value to lowest.
-2. Start with every loss component in the running weighted average.
-3. Add win components in order. Retain a win if it raises the running NPI. A
-   lowering win is still retained when needed to reach 10 win-equivalents; the
-   boundary component can be partially retained.
-4. Recheck loss components in order. Remove a loss if keeping it raises NPI.
-   There is no minimum number of retained losses.
-5. A team with no win component receives 85% of its lowest-rated opponent's
-   NPI. The published adjusted record for this case is `0.0-0.0`.
-
-A weak win can be excluded after the minimum is met. A loss to an exceptionally
-strong opponent can also be excluded if including it would raise NPI.
-
-The implementation is in `npi_model/season_npi.py`. Like the game-value module,
-it performs no internal rounding.
-
-### Verification against the NCAA export
-
-The regression fixture was extracted from `NCAA Statistics.xlsx`, SHA-256
-`40e308e6526b036cc797557b6e84774e93af5fd7a78373f7e2c8432b41c90a93`, and
-combined with the schools' official schedules through October 27, 2024.
-
-| Team | DIII record | Calculated NPI | Published NPI | Calculated adjusted W-L |
-|---|---:|---:|---:|---:|
-| Mary Washington | 15-0-1 | 62.061367 | 62.061 | 10.0-0.5 |
-| Dickinson | 13-1-3 | 57.655069 | 57.655 | 10.5-2.5 |
-| Rutgers-Newark | 8-6-4 | 52.573169 | 52.573 | 10.0-7.0 |
-| Trinity (CT) | 2-12 | 47.614650 | 47.615 | 2.0-7.0 |
-| Warren Wilson | 0-5 | 39.998450 | 39.999 | 0.0-0.0 |
-
-Every reconstructed value is within `0.001` of the published value, and all
-five adjusted records match exactly. The small NPI differences are expected:
-the export exposes opponent NPIs to only three decimals, while the NCAA system
-calculated with hidden full-precision values.
-
-## Division-wide convergence
-
-The implementation in `npi_model/division_npi.py` builds the full eligible-team
-schedule graph and performs simultaneous (Jacobi) passes. During a pass, every
-team uses only opponent NPIs from the previous pass. Newly calculated values are
-not visible until the next pass, so the answer cannot depend on team ordering.
-
-If no initial ratings are supplied, the solver uses the NCAA-style initial
-seed: 85% of the mean adjusted win percentage of each team's opponents, with no
-result component or quality-win bonus on that seed calculation. Custom seeds,
-including the published ratings, can also be supplied. Iteration stops only
-when the largest absolute change anywhere in the division is at or below the
-requested tolerance. No value is rounded internally.
-
-```python
-from npi_model import DivisionGame, iterate_division_npi
-
-games = [
-    DivisionGame("Team A", "Team B", "win"),
-    DivisionGame("Team B", "Team C", "tie"),
-    DivisionGame("Team C", "Team A", "loss"),
-]
-
-result = iterate_division_npi(games, convergence_tolerance=1e-10)
-print(result.ratings)
-print(result.iterations)
-```
-
-Pass `eligible_teams=` when the source includes teams that have records but are
-not NPI-eligible. A game is included only when both participants are in that
-set.
-
-### Full-division source reconciliation
-
-The default fixture is the NCAA selection export dated November 9, 2025. Its
-402 rated teams and 3,528 eligible games all reconcile to the published records.
-Starting from the published ratings, constant 50, constant zero, or opponent win
-percentage produces the same stable vector within `1e-8`. The maximum difference
-from the published three-decimal ratings is `0.000498283`; the default opponent
-win-percentage seed converges in 377 iterations at tolerance `1e-10`.
-
-The 2024 fixture remains a separate published-NPI regression:
-
-The real-data fixture in
-`tests/data/ncaa_2024_10_27_division.json` combines the supplied official export
-with the archived NCAA daily Division III men's soccer scoreboards through
-October 27, 2024.
-
-- The workbook contains 409 teams and 3,160 D-III games after three archived
-  scoreboard defects are reconciled against official team records.
-- Carlow and Penn St Brandywine have D-III records but blank published NPIs.
-  Excluding those two ineligible teams and all incident games leaves the actual
-  NPI graph: 407 teams and 3,137 games.
-- With the published opponent NPIs as one-pass inputs, all 407 calculated NPIs
-  are within `0.001` and all 407 published adjusted W-L records match exactly.
-- At a full-precision convergence tolerance of `1e-10`, all 407 stable ratings
-  remain within `0.001` of the published values. The largest difference is
-  `0.000499101` for TCNJ, consistent with the export's three-decimal display.
-
-| Initial seed | Iterations to `1e-10` | Maximum difference from published NPI |
-|---|---:|---:|
-| Published three-decimal NPIs | 83 | 0.000499101 |
-| Opponent win percentage (default) | 214 | 0.000499101 |
-| Constant 50 | 185 | 0.000499101 |
-| Constant 0 | 225 | 0.000499101 |
-
-The four final vectors differ from one another by less than `1e-8`, so the
-stable answer is not materially sensitive to these starting seeds. The seed
-does affect only how quickly the iteration reaches the fixed point.
-
-## Schedule simulation
-
-`npi_model/schedule_simulator.py` projects a proposed schedule without freezing
-opponent ratings:
-
-1. Remove every background game involving the target team. Because each game
-   is one shared graph edge, this also removes the reciprocal result from the
-   opponent.
-2. Insert the proposed conference and nonconference games for one explicit
-   outcome scenario.
-3. Reconverge all 407 eligible teams simultaneously.
-4. Report the target NPI and iteration diagnostics. For multiple scenarios,
-   also report the minimum, maximum, and probability-weighted expected NPI.
-
-```python
-from npi_model import (
-    NamedScheduleScenario,
-    ScheduledOpponent,
-    project_schedule_scenarios,
-)
-
-candidate_name = "<one opponent from the coach-provided pool>"
-schedule = [
-    ScheduledOpponent("Williams", "conference"),
-    ScheduledOpponent(candidate_name, "nonconference"),
-]
-scenarios = [
-    NamedScheduleScenario("both wins", ("win", "win")),
-    NamedScheduleScenario("both losses", ("loss", "loss")),
-]
-
-projection = project_schedule_scenarios(
-    background_games,
-    target_team="Amherst",
-    scheduled_opponents=schedule,
-    scenarios=scenarios,
-    eligible_teams=eligible_teams,
-    initial_ratings=published_ratings,
-)
-```
-
-Independent win/tie/loss probabilities can be expanded with
-`project_schedule_distribution`. This is exact rather than an approximation:
-each joint result scenario reconverges the whole division, and expected NPI is
-the probability-weighted mean of those converged scenarios. Because exact
-enumeration grows exponentially, the API refuses expansions above a configurable
-scenario limit. The schedule optimizer uses sampling for a 15-game future slate; it does not
-substitute an average result into the nonlinear season calculation.
-
-The real-data simulator regression removes Amherst's historical schedule from
-the verified graph, reinserts the same opponents and results, reconverges the
-division, and restores Amherst's published NPI within `0.001`.
-
-## Schedule comparison
-
-Run from this source checkout (the default graph is the reviewed fixture under
-`tests/data`; an installed package needs an explicit `--graph` path):
-
-```bash
-python -m npi_model plan --output reports/amherst-default
-```
-
-This writes a readable Markdown report and full-precision JSON. Existing reports
-are protected unless `--overwrite` is supplied. A default run makes hundreds of
-division solves and can take several minutes. For an exploratory smoke run:
-
-```bash
-python -m npi_model plan --samples 4 --validation-samples 8 --insight-samples 2 --output reports/quick
-```
-
-Small sample counts check the workflow, not the reliability of the ordering.
-`reports/` and `planning_inputs/` are ignored because actual coach plans may be private.
-
-### Opponent strength
-
-The demonstration is a **historical planning replay**, not a 2026 forecast. All
-other teams' games/results come from the selected season graph. Amherst's
-old games are removed from both sides and replaced by the proposed slate.
-Adding a game changes the opponent's schedule too, and every scenario reconverges
-every listed team. We do not know which other game the opponent might remove to make
-room; their other historical games are held fixed.
-
-Ten conference opponents are fixed by default: Bates, Bowdoin, Colby, Connecticut
-Col., Hamilton, Middlebury, Trinity (CT), Tufts, Wesleyan (CT), and Williams. These
-come from [Amherst's 2024 schedule](https://athletics.amherst.edu/schedule.aspx?path=msoc&season=2024),
-including Trinity after the export cutoff. “Fixed” locks the opponent, **not** a
-win/loss result. All ten outcomes are uncertain unless explicitly supplied.
-Nonconference choices remain open regardless of the current calendar date.
-
-The default seven-team pool contains the five historical nonconference opponents
-(Babson, Emerson, Manhattanville, Suffolk, WPI) plus Springfield and Western New
-Eng. as illustrative regional alternatives with real division profiles. This is
-not a coach-approved candidate list, and dates, travel, and availability are not
-verified. Five slots produce `choose(7, 5) = 21` combinations.
-
-A candidate's optional `recent_npi` changes **pregame win/tie/loss probabilities**.
-It does not pin their final rating. A new starting seed alone cannot change the
-historical graph's stable NPI. To project a genuinely different division season,
-supply an updated division result graph using `--graph`. An unfamiliar team with
-only an NPI number has no schedule profile in the division graph and is rejected.
-
-### Outcome probabilities
-
-The outcome model uses prior-season ratings for the 2024 and 2025 views. Let
-`d = (team NPI - opponent NPI) / 10`. Win, tie, and loss probabilities are the
-normalized exponentials of `(b*d/2, a, -b*d/2)`. Swapping teams swaps win and loss
-probabilities, while preserving the tie probability.
-
-Each training row uses a rating snapshot from the previous season. The newest
-season is held out from fitting. For 2025, older transitions receive 0.75 weight
-per game and the latest transition receives 1.0. That recency choice is disclosed
-and tested; it does not shrink the reported outcome range. The 2023 and 2022 views
-fall back to a same-season retrospective fit because no earlier reconstructed
-graph is included. Coach-supplied probabilities can replace either fit.
-
-For each sampled season:
-
-1. Independently draw win/tie/loss for each unlocked game.
-2. Build the reciprocal division graph for those actual categorical outcomes.
-3. Reconverge it using the verified season rule.
-4. Save Amherst's resulting NPI without rounding.
-
-Average the resulting NPIs, **not** the input game values. Retained-win thresholds,
-excluded losses, ties, and recursive feedback make the season calculation nonlinear.
-No injury, roster, travel, or shared team-form uncertainty is included yet.
-
-### Ranking and uncertainty
-
-Each opponent has a reproducible random stream derived from the run seed and
-team name. Shared opponents receive the same random draws across candidate
-schedules, reducing noise in paired differences. The default uses 24 screening
-draws per schedule, independently checks the leading six with 64 new draws each,
-then displays the leading three by validation mean. This is a sampled ranking,
-not a certified global optimum; screening can miss an alternative.
-
-The report distinguishes:
-
-- **P10–P90:** the simulated season-outcome spread.
-- **Mean standard error / approximate 95% interval:** Monte Carlo error in the
-  estimated expectation, conditional on this model. Not model uncertainty.
-- **Paired gap below the leader:** whether a small mean difference is large
-  relative to its simulation noise. More draws can change close rankings.
-- **All-unlocked-win / all-unlocked-loss stress cases:** useful scenarios, not
-  proven extrema of this nonlinear system.
-
-The fixed-only slate is a clearly labeled comparison baseline, not a recommendation
-to play fewer games. Each opponent also receives forced win, tie, and loss
-projections. Its marginal lift is measured against the **same schedule with that
-game omitted**, holding other draws constant. These impacts depend on the rest of
-the slate and are not additive. A negative win lift exposes a weak win that must
-still be retained; a small loss lift exposes limited downside after aggregation.
-Standalone one-slot impacts and five-slot contextual impacts are both reported.
-
-### Named opponents and bands
-
-The default tiers are sub-40, 40–55, 55–75, 75–100, and 100+. Intervals include
-the lower boundary and exclude the upper boundary. Ratings in this export range
-from 35.321 to 62.061, so the 75–100 and 100+ rating bands are empty.
-
-```bash
-python -m npi_model plan --mode bands --band-scale rating --output reports/rating-bands
-python -m npi_model plan --mode bands --band-scale rank --output reports/rank-bands
-```
-
-Rating mode selects up to two actual profiles per nonempty tier (low/high endpoints
-by default). Rank mode is a separate, explicit option: positions 75–99 mean the
-75th through 99th teams, not NPI values of 75–99. Ranks are ordinal positions sorted
-by displayed rating with alphabetical ties, not reconstructed hidden NCAA tie-breaks.
-Changing the scale does not change the calculation; it changes which teams enter
-the pool. With ten rank-band representatives, five slots create 252 combinations,
-so a rank-band run takes longer than the seven-team demonstration.
-
-Both modes show the bands, named representatives, and their individual win/loss
-impacts. Representative impact ranges are not averages over all teams in a tier.
-Unavailable rating bands additionally get clearly separated **fixed-rating
-arithmetic probes**, not division forecasts. Inputs above 100 are outside the
-verified calculator's domain; no value is invented for the open-ended 100+ tier.
-
-### Custom inputs and sensitivity
-
-Print the editable full defaults:
-
-```bash
-python -m npi_model planning-config
-```
-
-Save edited JSON in `planning_inputs/coach.json`, then run:
-
-```bash
-python -m npi_model plan --config planning_inputs/coach.json --output reports/coach
-```
-
-The JSON is merged with defaults at the **top level**; lists replace entire lists.
-`examples/named-opponents.json` keeps the illustrative seven-team pool;
-`examples/rank-band-75-100.json` compares three real profiles for one open slot
-from ordinal positions 75–99. Both inherit the full ten-opponent conference slate.
-For example:
-
-```bash
-python -m npi_model plan --config examples/rank-band-75-100.json --output reports/one-rank-band
-```
-
-Examples of individual list entries:
-
-```json
-{
-  "fixed_games": [
-    {"team": "Williams", "category": "conference", "result": "tie"},
-    {"team": "Tufts", "category": "conference"}
-  ],
-  "candidates": [
-    {"team": "Babson", "recent_npi": 55.123456789},
-    {"team": "WPI", "probabilities": {"win": 0.5, "tie": 0.2, "loss": 0.3}}
-  ],
-  "open_slots": 1,
-  "required": [],
-  "excluded": []
-}
-```
-
-This abbreviated example deliberately replaces the ten-game conference list;
-keep all ten in the real configuration. Probabilities are from the target team's
-perspective and must sum to one. A locked result cannot also have probabilities.
-`required` forces candidates into every combination; `excluded` removes candidates.
-An insufficient pool, duplicate opponent, unknown team, or combination count above
-`max_combinations` fails explicitly; the optimizer never silently truncates the search.
-
-To compare the softened assumption with the full retrospective strength fit:
-
-```bash
-python -m npi_model plan --slope-scale 0.5 --output reports/soft
-python -m npi_model plan --slope-scale 1.0 --output reports/steep
-```
-
-Keep seeds and sample counts equal for useful comparisons. Raise `--samples`,
-`--validation-samples`, and `--insight-samples` before making a consequential
-decision. Once pre-season ratings and multiple seasons are available, validate
-probabilities on entirely held-out seasons and model division-wide future outcomes.
-
-### Code map and verification
-
-| Module | Responsibility |
-|---|---|
-| `outcome_model.py` | Transparent provisional win/tie/loss probability fit |
-| `temporal_model.py` | Prior-season training and out-of-time evaluation |
-| `seasons.py` | Validated season registry and team history |
-| `planning.py` | Real graph loading, editable defaults, named and band inputs |
-| `fast_division.py` | Allocation-light version of the verified simultaneous solver |
-| `schedule_optimizer.py` | Full-division sampling, paired ranking and conditional impacts |
-| `planning_report.py` | Human-readable output; display rounding only |
-| `tests/test_schedule_optimizer.py` | Real-data solver equivalence, probabilities, input safeguards, ranking and sensitivity mechanics |
-| `tests/test_seasons.py` | 2025 published convergence, historical record reconciliation, and temporal holdout checks |
-
-The fast solver reproduces every reference rating **exactly** on the unchanged
-407-team graph at `1e-10`, including the 83 iterations from published seeds. Tests
-also change a real Amherst result and compare all 407 ratings across multiple
-seeds, check win/tie/loss conditional projections against the original solver,
-and restore the historical Amherst NPI within `0.001`. Planning defaults stop
-when the largest division-wide pass change is at most `1e-8`—well below display
-precision. This stopping residual is not asserted to be a general error bound
-for every conceivable modified graph. Nonconvergence raises an error.

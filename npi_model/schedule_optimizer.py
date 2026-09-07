@@ -188,7 +188,6 @@ def band_arithmetic(config, bands, fixed, ratings, model, target):
         if row["scale"] == "rating":
             low, high = band.get("lower"), band.get("upper")
             if high is not None and (low is None or low < 100):
-                # Probe the upper boundary, though band membership excludes it.
                 lo = max(0.0, float(low or 0))
                 hi = min(100.0, float(high))
                 for value in (lo, (lo+hi)/2, hi):
@@ -253,7 +252,6 @@ def rank_schedules(games, ratings, config, *, progress=None):
         if progress:
             progress(f"Scored schedule {i}/{total}: mean NPI {mean(values):.3f}")
     screened.sort(key=lambda row: (-row["screening"]["mean"], row["opponents"]))
-    # Validate extra finalists because sampling noise can change their order.
     finalist_count = top_n*2
     finalists = screened[:min(len(screened), max(finalist_count, top_n))]
     validation_seed = seed+1000003

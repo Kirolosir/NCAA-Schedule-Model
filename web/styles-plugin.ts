@@ -4,7 +4,6 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 
-// The native CSS adapter stalls on this host; use the pure-JS compiler.
 export function pureStyles(): Plugin {
   const root = dirname(fileURLToPath(import.meta.url));
   const walk = (dir: string): string[] => readdirSync(dir, {withFileTypes:true}).flatMap(e =>
@@ -19,7 +18,6 @@ export function pureStyles(): Plugin {
       async loadStylesheet(name, base) {
         const aliases: Record<string,string> = {
           tailwindcss:'tailwindcss/index.css', 'tw-animate-css':'tw-animate-css/dist/tw-animate.css',
-          'shadcn/tailwind.css':'shadcn/dist/tailwind.css',
         };
         const path = name.startsWith('.') ? resolve(base,name) : join(root,'node_modules',aliases[name] || name);
         return {path,base:dirname(path),content:readFileSync(path,'utf8')};

@@ -3,14 +3,12 @@ __pycache__/
 *.py[cod]
 .DS_Store
 
-# Local source exports. Regression tests use the reviewed JSON fixtures instead.
 NCAA Statistics.xlsx
 *.xlsx
 *.xls
 *.xlsm
 local_data/
 
-# Local configuration and credentials.
 .env
 .env.*
 !.env.example
@@ -19,7 +17,6 @@ local_data/
 credentials*.json
 secrets*.json
 
-# Test, coverage, build, and editor artifacts.
 .pytest_cache/
 .coverage
 htmlcov/
@@ -29,10 +26,8 @@ dist/
 .idea/
 .vscode/
 
-# Local coach inputs and generated planning reports can contain private plans.
 planning_inputs/
 reports/
 
-# Dashboard dependencies and generated build/type caches.
 node_modules/
 *.tsbuildinfo

@@ -101,7 +101,6 @@ def calculate_season_npi(
                 )
             )
 
-    # Winless teams use the lowest opponent loss value and an adjusted 0.0-0.0 record.
     if not win_candidates:
         npi = min(component.unit_value for component in loss_candidates)
         components = tuple(
@@ -155,7 +154,6 @@ def calculate_season_npi(
         elif retained_win_weight >= minimum_retained_wins:
             retained_weight = 0.0
         else:
-            # A fractional component can fill the remaining minimum-win weight.
             retained_weight = minimum_retained_wins - retained_win_weight
 
         retained_weights[id(component)] = retained_weight

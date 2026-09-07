@@ -49,7 +49,6 @@ class TestDivisionPass(unittest.TestCase):
             minimum_retained_wins=0.0,
         )
 
-        # B must use A's previous rating of 10, not its new rating of 28.75.
         self.assertAlmostEqual(actual["A"], 28.75)
         self.assertAlmostEqual(actual["B"], 24.5)
         self.assertAlmostEqual(actual["C"], 20.25)

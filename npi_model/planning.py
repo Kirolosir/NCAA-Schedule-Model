@@ -49,7 +49,6 @@ def band_members(ratings, lower, upper, *, scale="rating", excluded=()):
     if lower is not None and upper is not None and lower >= upper:
         raise ValueError("lower band bound must be below upper")
     ordered = sorted(ratings, key=lambda team: (-ratings[team], team))
-    # Displayed-rating ties use alphabetical order, not NCAA tiebreaks.
     values = ratings if scale == "rating" else {t: i+1 for i, t in enumerate(ordered)}
     return sorted((t for t in ratings if t not in excluded
                    and (lower is None or values[t] >= lower)

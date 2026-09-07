@@ -174,7 +174,6 @@ class AppState:
         raw = request.get("config", default_config())
         season = raw.get("season", DEFAULT_SEASON) if isinstance(raw, dict) else DEFAULT_SEASON
         data, ratings, _ = load_season(season)
-        # A temporary real candidate lets the explorer accept an incomplete pool.
         config = dict(raw)
         fixed_names = {g.get("team") for g in config.get("fixed_games", []) if isinstance(g, dict)}
         spare = next(t for t in ratings if t not in fixed_names and t != config.get("target_team", "Amherst"))
@@ -299,7 +298,7 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
-            pass  # Fast slider edits can abort an obsolete browser request.
+            pass
 
     def trusted_request(self):
         host = self.headers.get("Host", "")

@@ -44,7 +44,6 @@ class CompiledDivision:
                 if not wins:
                     current.append(min(loss_values[i] for i, _ in losses))
                     continue
-                # Stable sorting by value preserves the reference's order at ties.
                 w = sorted(((win_values[i], weight) for i, weight in wins),
                            key=lambda x: x[0], reverse=True)
                 losses_sorted = sorted(((loss_values[i], weight) for i, weight in losses),

@@ -87,7 +87,6 @@ class TestAppState(unittest.TestCase):
                 expected=calculate_season_npi(baseline_games+[SeasonGame('probe',npi,outcome)]).npi
                 self.assertEqual(actual['outcomes'][outcome]['npi'],expected)
                 self.assertEqual(actual['outcomes'][outcome]['impact'],expected-baseline)
-        # Ten existing wins can exclude an extra weak win. Below ten it counts.
         self.assertEqual(self.state.explore({'config':config,'opponent_npi':39})['outcomes']['win']['impact'],0)
         config['fixed_games'][-1]['result']='loss'
         self.assertLess(self.state.explore({'config':config,'opponent_npi':39})['outcomes']['win']['impact'],0)

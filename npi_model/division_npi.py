@@ -72,7 +72,6 @@ def _build_schedules(
         if game.result_a not in ("win", "loss", "tie"):
             raise ValueError("result_a must be 'win', 'loss', or 'tie'")
 
-        # Both teams must be eligible; the export includes two without published NPIs.
         if game.team_a not in team_set or game.team_b not in team_set:
             continue
 
@@ -171,7 +170,6 @@ def _calculate_pass_from_schedules(
     previous_ratings: Mapping[str, float],
     minimum_retained_wins: float,
 ) -> dict[str, float]:
-    # Use only the previous pass so team order cannot affect the result.
     return {
         team: calculate_season_npi(
             [

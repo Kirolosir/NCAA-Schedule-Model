@@ -20,7 +20,6 @@ def _loss(rows, slope, tie):
 
 
 def _fit(rows):
-    # Fixed-step coordinate search keeps the convex likelihood fit deterministic.
     slope, tie, step = 1.0, -1.0, 1.0
     score = _loss(rows, slope, tie)
     while step > 1e-6:
@@ -67,7 +66,6 @@ class OutcomeModel:
         ties = sum(y == 1 for _, y in rows)
         tie_rate = min(1-1e-9, max(1e-9, ties/len(rows)))
         baseline_a = log(2*tie_rate/(1-tie_rate))
-        # End-period ratings leak results into both halves of this split.
         train = [row for i, row in enumerate(rows) if i % 5]
         test = [row for i, row in enumerate(rows) if i % 5 == 0]
         hold_b, hold_a = _fit(train or rows)
