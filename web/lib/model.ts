@@ -5,7 +5,7 @@ export type Venue = 'home' | 'away' | 'either';
 export type Priority = 'required' | 'preferred' | 'available';
 export type Candidate = {team: string; recent_npi?: number; probabilities?: Probabilities; matchup?: Matchup;
   venue?: Venue; available_dates?: string[]; travel_miles?: number; estimated_cost?: number};
-export type FixedGame = {team: string; category?: string; result?: Outcome; probabilities?: Probabilities};
+export type FixedGame = {team: string; category?: string; result?: Outcome; probabilities?: Probabilities; decision?: 'advanced_on_penalties'|'eliminated_on_penalties'};
 export type Band = {label: string; lower: number | null; upper: number | null; member_count?: number; representatives?: string[]};
 export type Config = {
   season: string; probability_model: 'historical' | 'retrospective';

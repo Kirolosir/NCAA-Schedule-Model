@@ -21,7 +21,11 @@ matchup odds automatically. Injuries, roster changes, and future form are not mo
 - Shows a data-based matchup starting point for every opponent.
 - Filters by required, preferred, unavailable, date, travel, and cost inputs.
 - Saves and reopens planning scenarios in the current browser.
-- Starts with a conservative .500 NESCAC baseline: four wins, two ties, and four losses.
+- Starts with a conservative .500 NESCAC baseline and lets the user enter any
+  ten-game conference finish before adjusting individual matchups.
+- Records penalty-kick advancement or elimination as an NPI tie.
+- Compares the projected average with all-open-game wins and losses, including
+  the resulting record and retained-win-floor status.
 - Shows a likely range so a risky schedule does not look safer than it is.
 - Allows two browser tabs to run independent comparisons and cancels a run immediately.
 - Keeps 2025, 2024, 2023, and 2022 as separate historical reference seasons.
@@ -74,9 +78,13 @@ and half of a loss component.
 
 Season NPI is not a simple average. Win and loss components are sorted by game
 value. Lowering wins must be retained until the team reaches ten retained
-win-equivalents; after that, they can be excluded. A loss can be excluded when
-keeping it would raise the rating. Winless teams use 85% of their lowest-rated
-opponent's NPI.
+win-equivalents, with each tie contributing half a win. After that, the weakest
+win components can be excluded when they lower the rating. This depends on game
+value, not when the game was played. A loss can be excluded when keeping it
+would raise the rating. Winless teams use 85% of their lowest-rated opponent's
+NPI. A postseason game decided by penalty kicks is recorded as a tie for NPI
+while the kicks determine advancement; the national championship game is the
+exception.
 
 Because every opponent's rating also depends on its opponents, the division
 solver updates every team simultaneously until the largest change is below the

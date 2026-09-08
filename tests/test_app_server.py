@@ -52,6 +52,14 @@ class TestAppValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_config({'candidates':[{'team':'Babson','probabilities':
                              {'win':.8,'tie':.2,'loss':.2}}]},self.ratings)
+        valid=default_config()
+        valid['fixed_games'][0].update(result='tie',decision='eliminated_on_penalties')
+        parsed,_=validate_config(valid,self.ratings)
+        self.assertEqual(parsed['fixed_games'][0]['decision'],'eliminated_on_penalties')
+        invalid=default_config()
+        invalid['fixed_games'][0].update(result='win',decision='advanced_on_penalties')
+        with self.assertRaisesRegex(ValueError,'ties'):
+            validate_config(invalid,self.ratings)
 
     def test_practical_planning_fields_and_constraints(self):
         config=default_config()

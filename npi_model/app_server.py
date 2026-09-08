@@ -66,7 +66,7 @@ def validate_config(raw, ratings):
         for row in config[key]:
             if not isinstance(row, dict) or not isinstance(row.get("team"), str):
                 raise ValueError(f"Each entry in {key} needs a team name")
-            allowed = {"team", "category", "result", "probabilities"} if key == "fixed_games" else {
+            allowed = {"team", "category", "result", "probabilities", "decision"} if key == "fixed_games" else {
                 "team", "recent_npi", "probabilities", "matchup", "venue",
                 "available_dates", "travel_miles", "estimated_cost"}
             if set(row)-allowed:
@@ -79,6 +79,12 @@ def validate_config(raw, ratings):
                     raise ValueError("Probabilities need win, tie, and loss")
                 for outcome, value in p.items():
                     number(value, f"{outcome} probability", 0, 1)
+            if key == "fixed_games":
+                decision = row.get("decision")
+                if decision not in (None, "advanced_on_penalties", "eliminated_on_penalties"):
+                    raise ValueError("Choose a valid penalty-kick decision")
+                if decision is not None and row.get("result") != "tie":
+                    raise ValueError("Penalty-kick decisions count as ties")
             if key == "candidates":
                 if row.get("matchup", "custom" if row.get("probabilities") else "model") not in (
                         "model", "favorite", "toss_up", "underdog", "custom"):

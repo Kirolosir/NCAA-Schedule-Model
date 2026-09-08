@@ -38,6 +38,7 @@ class FixedGame:
     category: str = "conference"
     result: str | None = None
     probabilities: OutcomeProbabilities | None = None
+    decision: str | None = None
 
 
 def load_graph(path=DEFAULT_GRAPH):
@@ -172,7 +173,8 @@ def parse_plan(config, ratings):
     if not isfinite(strength) or not 0 <= strength <= 100:
         raise ValueError("target_recent_npi must be finite and in 0–100")
     fixed = tuple(FixedGame(row["team"], row.get("category", "conference"),
-                            row.get("result"), probability_override(row.get("probabilities")))
+                            row.get("result"), probability_override(row.get("probabilities")),
+                            row.get("decision"))
                   for row in config["fixed_games"])
     if not fixed:
         raise ValueError("fixed_games must include at least one baseline game")
@@ -185,6 +187,10 @@ def parse_plan(config, ratings):
             raise ValueError("invalid locked game result")
         if game.result is not None and game.probabilities is not None:
             raise ValueError("locked results cannot also have outcome probabilities")
+        if game.decision not in (None, "advanced_on_penalties", "eliminated_on_penalties"):
+            raise ValueError("invalid penalty-kick decision")
+        if game.decision is not None and game.result != "tie":
+            raise ValueError("a penalty-kick decision must be recorded as a tie")
     if len({g.team for g in fixed}) != len(fixed):
         raise ValueError("duplicate fixed opponents are unsupported; use unique opponents")
     if not set(config.get("excluded", [])) <= set(ratings):
