@@ -18,6 +18,7 @@ travel, injuries, roster changes, and future form are not modeled.
 - Tracks every schedule against an editable target NPI.
 - Starts with a conservative .500 NESCAC baseline: four wins, two ties, and four losses.
 - Shows a likely range so a risky schedule does not look safer than it is.
+- Allows two browser tabs to run independent comparisons and cancels a run immediately.
 - Keeps 2025, 2024, 2023, and 2022 as separate historical reference seasons.
 - Uses full precision internally and rounds only for display.
 
@@ -103,7 +104,8 @@ check rather than part of the probability fitting sample.
 ## Comparison modes
 
 - **Quick** screens the pool with short division passes, then fully converges the
-  finalists. This is the default for trying ideas.
+  leading shortlist to well below the displayed 0.001 precision. This is the
+  default for trying ideas.
 - **Standard** uses a larger sample and shortlist.
 - **Thorough** fully evaluates the widest set and is intended for a final review.
 

@@ -61,6 +61,18 @@ class TestFastDivision(RealDataCase):
         with self.assertRaises(ValueError):
             CompiledDivision(self.games, self.ratings).solve(self.ratings, tolerance=0)
 
+    def test_long_solves_honor_cancellation_checkpoints(self):
+        calls = 0
+        def stop():
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                raise InterruptedError("stop")
+        with self.assertRaises(InterruptedError):
+            CompiledDivision(self.games, self.ratings).solve(
+                self.ratings, exact=False, checkpoint=stop)
+        self.assertEqual(calls, 3)
+
 
 class TestOutcomeModel(RealDataCase):
     @classmethod

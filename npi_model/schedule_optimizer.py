@@ -51,7 +51,7 @@ def _uniforms(seed, team, count):
 
 class ScheduleEvaluator:
     def __init__(self, games, ratings, target, fixed, candidates, model, *,
-                 target_recent_npi=None, tolerance=1e-8):
+                 target_recent_npi=None, tolerance=1e-8, checkpoint=None):
         self.ratings = dict(ratings)
         self.target = target
         self.fixed = fixed
@@ -60,6 +60,7 @@ class ScheduleEvaluator:
         self.cache = {}
         self.screen_cache = {}
         self.solves = 0
+        self.checkpoint = checkpoint
         self._warm_ratings = self.ratings
         strength = ratings[target] if target_recent_npi is None else target_recent_npi
         self.probabilities = {
@@ -69,22 +70,27 @@ class ScheduleEvaluator:
                                    for g in fixed})
 
     def solve(self, outcomes):
+        if self.checkpoint:
+            self.checkpoint()
         key = tuple(sorted(outcomes))
         if key not in self.cache:
             games = self.background + [DivisionGame(self.target, t, r) for t, r in key]
             result = CompiledDivision(games, self.ratings).solve(
-                self._warm_ratings, tolerance=self.tolerance, exact=False)
+                self._warm_ratings, tolerance=self.tolerance, exact=False,
+                checkpoint=self.checkpoint)
             self._warm_ratings = result.ratings
             self.cache[key] = result.ratings[self.target]
             self.solves += 1
         return self.cache[key]
 
     def estimate(self, outcomes, *, iterations=8):
+        if self.checkpoint:
+            self.checkpoint()
         key = (iterations, tuple(sorted(outcomes)))
         if key not in self.screen_cache:
             games = self.background + [DivisionGame(self.target, t, r) for t, r in key[1]]
             ratings = CompiledDivision(games, self.ratings).estimate(
-                self.ratings, iterations=iterations)
+                self.ratings, iterations=iterations, checkpoint=self.checkpoint)
             self.screen_cache[key] = ratings[self.target]
         return self.screen_cache[key]
 
@@ -237,10 +243,13 @@ def rank_schedules(games, ratings, config, *, progress=None):
     model = replace(fitted, slope=fitted.slope*scale)
     extra_names = {t for b in bands for t in b["representatives"]}-names
     extras = [Candidate(t, ratings[t]) for t in sorted(extra_names)]
+    checkpoint = getattr(progress, "checkpoint", None)
     evaluator = ScheduleEvaluator(games, ratings, target, fixed, candidates+tuple(extras), model,
-                                  target_recent_npi=config.get("target_recent_npi"), tolerance=tolerance)
+                                  target_recent_npi=config.get("target_recent_npi"), tolerance=tolerance,
+                                  checkpoint=checkpoint)
     seed = config["seed"]
-    fast = config.get("analysis_mode", "thorough") != "thorough"
+    mode = config.get("analysis_mode", "thorough")
+    fast = mode != "thorough"
     screening_sample = evaluator.screening_sample if fast else evaluator.sample
     baseline = screening_sample((), samples=config["samples"], seed=seed)
     screened = []
@@ -252,7 +261,7 @@ def rank_schedules(games, ratings, config, *, progress=None):
         if progress:
             progress(f"Scored schedule {i}/{total}: mean NPI {mean(values):.3f}")
     screened.sort(key=lambda row: (-row["screening"]["mean"], row["opponents"]))
-    finalist_count = top_n*2
+    finalist_count = top_n+1 if mode == "quick" else top_n*2
     finalists = screened[:min(len(screened), max(finalist_count, top_n))]
     validation_seed = seed+1000003
     baseline_validation = evaluator.sample((), samples=config["validation_samples"], seed=validation_seed)

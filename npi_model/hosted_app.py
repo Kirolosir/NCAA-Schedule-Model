@@ -71,7 +71,8 @@ def create_app(*, state=None, public_origin=None):
         except ValueError as error:
             return jsonify(error=str(error)), 400
         data["config"].update(samples=4, validation_samples=4, insight_samples=2,
-                              analysis_mode="quick", include_standalone_insights=False)
+                              analysis_mode="quick", include_standalone_insights=False,
+                              convergence_tolerance=1e-6)
         data.update(report=None, deployment={"hosted": True, "max_job_minutes": 20})
         return jsonify(data)
 

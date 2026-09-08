@@ -100,26 +100,33 @@ class TestAppState(unittest.TestCase):
         for value in (True, '52', -1, 101):
             with self.assertRaises(ValueError): self.state.explore({'opponent_npi':value})
 
-    def test_single_job_cancellation_and_recovery(self):
+    def test_two_jobs_can_run_and_cancellation_stops_at_a_checkpoint(self):
         entered, release = threading.Event(), threading.Event()
         original=self.state.ranker
         def waiting_ranker(games, ratings, config, progress):
             entered.set()
-            release.wait(3)
+            while not release.wait(.01):
+                progress.checkpoint()
             progress('Scored schedule 1/21')
             return {'config':deepcopy(config)}
         self.state.ranker=waiting_ranker
         try:
-            job_id=self.state.start({})['id']
+            job_id=self.state.start({},owner='first')['id']
             self.assertTrue(entered.wait(2))
-            with self.assertRaises(RuntimeError): self.state.start({})
-            self.assertEqual(self.state.job(job_id,cancel=True)['status'],'cancelling')
+            second=self.state.start({},owner='second')['id']
+            with self.assertRaises(RuntimeError): self.state.start({},owner='third')
+            self.assertEqual(self.state.job(job_id,cancel=True,owner='first')['status'],'cancelled')
+            deadline=time.monotonic()+1
+            while job_id in self.state.active_jobs and time.monotonic()<deadline: time.sleep(.01)
+            third=self.state.start({},owner='third')['id']
+            self.assertEqual(self.state.job(second,owner='second')['status'],'running')
+            self.assertEqual(self.state.job(third,owner='third')['status'],'running')
             release.set()
             deadline=time.monotonic()+3
             while self.state.active and time.monotonic()<deadline: time.sleep(.01)
-            self.assertEqual(self.state.job(job_id)['status'],'cancelled')
+            self.assertEqual(self.state.job(job_id,owner='first')['status'],'cancelled')
             self.assertIsNone(self.state.active)
-            self.assertNotIn('cancel',self.state.job(job_id))
+            self.assertNotIn('cancel',self.state.job(job_id,owner='first'))
             def broken(*args, **kwargs): raise ValueError('Expected test failure')
             self.state.ranker=broken
             failed=self.state.start({})['id']

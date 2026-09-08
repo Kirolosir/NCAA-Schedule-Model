@@ -118,15 +118,19 @@ class CalculationCancelled(Exception):
 
 
 class AppState:
-    def __init__(self, *, ranker=rank_schedules, max_job_seconds=None):
+    def __init__(self, *, ranker=rank_schedules, max_job_seconds=None,
+                 max_concurrent_jobs=2):
+        if not isinstance(max_concurrent_jobs, int) or max_concurrent_jobs < 1:
+            raise ValueError("max_concurrent_jobs must be a positive integer")
         self.data, self.ratings, self.games = load_season(DEFAULT_SEASON)
         self.models = {}
         self.model = self.model_for(DEFAULT_SEASON, "historical")
         self.ranker = ranker
         self.max_job_seconds = max_job_seconds
+        self.max_concurrent_jobs = max_concurrent_jobs
         self.lock = threading.Lock()
         self.jobs = {}
-        self.active = None
+        self.active_jobs = set()
         self.reference = None
         reference_path = ROOT/"reports/amherst-default.json"
         if reference_path.exists():
@@ -137,6 +141,11 @@ class AppState:
                     self.reference = report
             except (ValueError, OSError):
                 pass
+
+    @property
+    def active(self):
+        with self.lock:
+            return next(iter(self.active_jobs), None)
 
     def model_for(self, season, method):
         key = (season, method)
@@ -213,27 +222,33 @@ class AppState:
         data, ratings, games = load_season(season)
         config, summary = validate_config(raw, ratings)
         with self.lock:
-            if self.active:
-                raise RuntimeError("A comparison is already running. Finish or cancel it first.")
+            if len(self.active_jobs) >= self.max_concurrent_jobs:
+                raise RuntimeError(f"{self.max_concurrent_jobs} comparisons are already running. Cancel one or wait for one to finish.")
             while len(self.jobs) >= 8:
-                del self.jobs[next(iter(self.jobs))]
+                expired = next((key for key, value in self.jobs.items()
+                                if value["status"] not in {"running", "cancelling"}), None)
+                if expired is None:
+                    break
+                del self.jobs[expired]
             job_id = uuid4().hex
             job = {"id": job_id, "status": "running", "message": "Preparing division model", "progress": 0,
                    "started": time.time(), "config": config, "summary": summary, "season": season,
                    "owner": owner, "cancel": threading.Event()}
             self.jobs[job_id] = job
-            self.active = job_id
+            self.active_jobs.add(job_id)
         threading.Thread(target=self._run, args=(job_id,), daemon=True).start()
         return {"id": job_id}
 
     def _run(self, job_id):
         job = self.jobs[job_id]
         started = time.monotonic()
-        def progress(message):
+        def checkpoint():
             if job["cancel"].is_set():
                 raise CalculationCancelled()
             if self.max_job_seconds and time.monotonic()-started > self.max_job_seconds:
                 raise TimeoutError("Time limit reached. Try fewer candidates or Quick exploration.")
+        def progress(message):
+            checkpoint()
             match = re.search(r"(\d+)/(\d+)", message)
             fraction = int(match[1])/int(match[2]) if match else 0
             level = job["progress"]
@@ -246,7 +261,9 @@ class AppState:
             elif message.startswith("Evaluated"):
                 level = min(.99, level+.005)
             with self.lock:
-                job.update(message=message, progress=level)
+                if job["status"] == "running":
+                    job.update(message=message, progress=level)
+        progress.checkpoint = checkpoint
         try:
             data, ratings, games = load_season(job["season"])
             report = self.ranker(games, ratings, job["config"], progress=progress)
@@ -254,17 +271,21 @@ class AppState:
                 raise CalculationCancelled()
             report["source"] = data["source"]
             with self.lock:
-                job.update(status="complete", progress=1, message="Comparison complete", report=report)
+                if job["status"] == "running":
+                    job.update(status="complete", progress=1, message="Comparison complete", report=report)
         except CalculationCancelled:
             with self.lock:
                 job.update(status="cancelled", message="Comparison cancelled. Your inputs are unchanged.")
         except Exception as error:
             with self.lock:
-                job.update(status="error", message=f"Calculation stopped: {error}")
+                if job["cancel"].is_set():
+                    job.update(status="cancelled", message="Comparison cancelled. Your inputs are unchanged.")
+                else:
+                    job.update(status="error", message=f"Calculation stopped: {error}")
         finally:
             with self.lock:
                 job["finished"] = time.time()
-                self.active = None
+                self.active_jobs.discard(job_id)
 
     def job(self, job_id, *, cancel=False, owner=None):
         with self.lock:
@@ -273,7 +294,7 @@ class AppState:
             job = self.jobs[job_id]
             if cancel and job["status"] == "running":
                 job["cancel"].set()
-                job.update(status="cancelling", message="Stopping after the current calculation…")
+                job.update(status="cancelled", message="Comparison cancelled. Your inputs are unchanged.")
             return {k: v for k, v in job.items() if k not in {"cancel", "owner"}}
 
 

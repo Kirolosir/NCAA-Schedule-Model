@@ -78,7 +78,7 @@ class TestHostedApp(unittest.TestCase):
             self.assertEqual(self.get(path).status_code, 404, path)
             self.assertEqual(self.client.head(path, base_url=self.origin).status_code, 404, path)
 
-    def test_jobs_are_owned_by_one_browser_session(self):
+    def test_two_browser_sessions_can_compare_at_the_same_time(self):
         entered, release = threading.Event(), threading.Event()
         original = self.state.ranker
         def ranker(games, ratings, config, progress):
@@ -88,6 +88,7 @@ class TestHostedApp(unittest.TestCase):
             return {"config": config}
         self.state.ranker = ranker
         job_id = None
+        second_id = None
         try:
             response = self.post("/api/jobs", {})
             self.assertEqual(response.status_code, 202)
@@ -96,10 +97,16 @@ class TestHostedApp(unittest.TestCase):
             other = self.app.test_client()
             self.assertEqual(self.get("/api/jobs/"+job_id, other).status_code, 404)
             self.assertEqual(self.post("/api/jobs/"+job_id+"/cancel", {}, other).status_code, 404)
-            self.assertEqual(self.post("/api/jobs", {}, other).status_code, 409)
+            second = self.post("/api/jobs", {}, other)
+            self.assertEqual(second.status_code, 202)
+            second_id = second.get_json()["id"]
+            third = self.app.test_client()
+            self.assertEqual(self.post("/api/jobs", {}, third).status_code, 409)
             self.assertEqual(self.get("/api/jobs/"+job_id).status_code, 200)
             self.assertNotIn("owner", self.get("/api/jobs/"+job_id).get_json())
-            self.assertEqual(self.post("/api/jobs/"+job_id+"/cancel", {}).status_code, 200)
+            cancelled = self.post("/api/jobs/"+job_id+"/cancel", {}).get_json()
+            self.assertEqual(cancelled["status"], "cancelled")
+            self.assertEqual(self.post("/api/jobs/"+second_id+"/cancel", {}, other).status_code, 200)
         finally:
             release.set()
             deadline = time.monotonic()+4
