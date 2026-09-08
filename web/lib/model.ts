@@ -32,7 +32,7 @@ export type Report = {config: Config; target_team: string; top_schedules: Schedu
   division_solves: number; source: {cutoff: string}; limitations: string[];
   calculation?: {screening:string; finalists:string; opponent_impacts:string}};
 export type HistoryRow = {season:string; npi:number|null; record:string|null; cutoff:string; rating_kind:string};
-export type Team = {name: string; npi: number; rank: number; record: string; history:HistoryRow[];
+export type Team = {name: string; npi: number; planning_npi:number; rank: number; record: string; history:HistoryRow[];
   matchup_outlook:'favorite'|'toss_up'|'underdog'; matchup_probabilities:Probabilities};
 export type SeasonSource = {season:string; cutoff:string; snapshot:string; rating_kind:string; eligible_npi_teams:number; eligible_npi_games:number; validation:{max_published_error?:number; iterations?:number; published_npi_available?:boolean}};
 export type Bootstrap = {config: Config; teams: Team[]; source: SeasonSource; seasons:SeasonSource[]; report: Report | null;

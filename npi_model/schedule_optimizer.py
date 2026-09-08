@@ -13,6 +13,7 @@ from .outcome_model import OutcomeModel
 from .temporal_model import planning_model
 from .planning import Candidate, candidate_schedules, parse_plan
 from .season_npi import SeasonGame, calculate_season_npi
+from .seasons import PLANNING_WEIGHTS, planning_ratings
 
 
 def summarize(values):
@@ -50,7 +51,7 @@ def _uniforms(seed, team, count):
 
 class ScheduleEvaluator:
     def __init__(self, games, ratings, target, fixed, candidates, model, *,
-                 target_recent_npi=None, tolerance=1e-8, checkpoint=None):
+                 target_recent_npi=None, probability_ratings=None, tolerance=1e-8, checkpoint=None):
         self.ratings = dict(ratings)
         self.target = target
         self.fixed = fixed
@@ -61,11 +62,12 @@ class ScheduleEvaluator:
         self.solves = 0
         self.checkpoint = checkpoint
         self._warm_ratings = self.ratings
+        probability_ratings = probability_ratings or ratings
         strength = ratings[target] if target_recent_npi is None else target_recent_npi
         self.probabilities = {
             c.team: c.probabilities or model.predict(strength, c.recent_npi) for c in candidates
         }
-        self.probabilities.update({g.team: g.probabilities or model.predict(strength, ratings[g.team])
+        self.probabilities.update({g.team: g.probabilities or model.predict(strength, probability_ratings[g.team])
                                    for g in fixed})
 
     def solve(self, outcomes):
@@ -177,12 +179,13 @@ def approximate_risk_reward(evaluator, teams, *, samples, seed):
     return rows
 
 
-def band_arithmetic(config, bands, fixed, ratings, model, target):
+def band_arithmetic(config, bands, fixed, ratings, model, target, probability_ratings=None):
     """Diagnostic only: fixed opponent ratings and one added slot, not a graph forecast."""
     games = []
-    strength = config.get("target_recent_npi", ratings[target])
+    probability_ratings = probability_ratings or ratings
+    strength = config.get("target_recent_npi", probability_ratings[target])
     for g in fixed:
-        p = g.probabilities or model.predict(strength, ratings[g.team])
+        p = g.probabilities or model.predict(strength, probability_ratings[g.team])
         outcome = g.result or max(p.as_items(), key=lambda x: x[1])[0]
         games.append(SeasonGame(g.team, ratings[g.team], outcome))
     base = calculate_season_npi(games).npi
@@ -210,6 +213,7 @@ def band_arithmetic(config, bands, fixed, ratings, model, target):
 
 def rank_schedules(games, ratings, config, *, progress=None):
     target, fixed, candidates, bands = parse_plan(config, ratings)
+    strengths = planning_ratings(config["season"])
     for key in ("samples", "validation_samples", "insight_samples"):
         if not isinstance(config[key], int) or config[key] < 2:
             raise ValueError(f"{key} must be an integer >= 2")
@@ -251,10 +255,11 @@ def rank_schedules(games, ratings, config, *, progress=None):
     fitted = planning_model(games, ratings, config)
     model = replace(fitted, slope=fitted.slope*scale)
     extra_names = {t for b in bands for t in b["representatives"]}-names
-    extras = [Candidate(t, ratings[t]) for t in sorted(extra_names)]
+    extras = [Candidate(t, strengths.get(t, ratings[t])) for t in sorted(extra_names)]
     checkpoint = getattr(progress, "checkpoint", None)
     evaluator = ScheduleEvaluator(games, ratings, target, fixed, candidates+tuple(extras), model,
-                                  target_recent_npi=config.get("target_recent_npi"), tolerance=tolerance,
+                                  target_recent_npi=config.get("target_recent_npi", strengths[target]),
+                                  probability_ratings=strengths, tolerance=tolerance,
                                   checkpoint=checkpoint)
     seed = config["seed"]
     mode = config.get("analysis_mode", "thorough")
@@ -331,11 +336,12 @@ def rank_schedules(games, ratings, config, *, progress=None):
         "background": {"teams": len(ratings), "games": len(games), "rating_min": min(ratings.values()),
                        "rating_max": max(ratings.values())},
         "probability_model": {"fit": asdict(fitted), "slope_scale": scale,
-                               "used_slope": model.slope},
+                               "used_slope": model.slope,
+                               "strength_weights": list(PLANNING_WEIGHTS)},
         "candidates": [{**asdict(c), "outcome_rating_extrapolation":
                         not fitted.rating_min <= c.recent_npi <= fitted.rating_max}
                        for c in candidates],
-        "bands": band_arithmetic(config, bands, fixed, ratings, model, target),
+        "bands": band_arithmetic(config, bands, fixed, ratings, model, target, strengths),
         "screening": screened, "validated_finalists": finalists,
         "top_schedules": top, "standalone_opponents": standalone,
         "baseline_projection": summarize(baseline_validation), "division_solves": evaluator.solves,
@@ -346,6 +352,7 @@ def rank_schedules(games, ratings, config, *, progress=None):
             "Fixed means opponent locked; outcomes remain uncertain unless result is supplied. All nonconference decisions are open by default.",
             "Recent NPI overrides affect pregame probabilities only. The historical result graph determines converged NPI; changing an iteration seed cannot change a fixed point.",
             probability_note,
+            "Default matchup strength blends the selected season and two prior seasons at 50/30/20. The selected season alone remains the division graph used for NPI convergence.",
             f"Probability slope scale={scale} is a planning sensitivity, not a calibrated uncertainty estimate. Override probabilities or vary this setting.",
             "Game outcomes are conditionally independent; no injury, roster, or common team-form uncertainty is modeled. Venue and travel do not change win probabilities unless the matchup outlook is adjusted.",
             "P10–P90 describes simulated season spread. Mean CI95 describes Monte Carlo error conditional on the model; neither includes model uncertainty.",

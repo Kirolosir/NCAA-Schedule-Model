@@ -19,7 +19,7 @@ from .outcome_model import OutcomeModel
 from .planning import candidate_schedules, default_config, parse_plan
 from .schedule_optimizer import rank_schedules
 from .season_npi import SeasonGame, calculate_season_npi
-from .seasons import DEFAULT_SEASON, catalog, load_season, team_history
+from .seasons import DEFAULT_SEASON, PLANNING_WEIGHTS, catalog, load_season, planning_ratings, team_history
 from .temporal_model import historical_model
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -172,7 +172,8 @@ class AppState:
             try:
                 report = json.loads(reference_path.read_text())
                 if (report.get("source", {}).get("workbook_sha256") == self.data["source"]["workbook_sha256"]
-                        and report.get("config") == default_config()):
+                        and report.get("config") == default_config()
+                        and report.get("probability_model", {}).get("strength_weights") == list(PLANNING_WEIGHTS)):
                     self.reference = report
             except (ValueError, OSError):
                 pass
@@ -199,12 +200,13 @@ class AppState:
         diagnostics = historical_model(season)[1] if config["probability_model"] == "historical" else None
         ordered = sorted(ratings, key=lambda t: (-ratings[t], t))
         records = {row[0]: row[2] for row in data["teams"]}
-        target_strength = ratings[config["target_team"]]
+        strengths = planning_ratings(season)
+        target_strength = strengths[config["target_team"]]
         def team_row(team, rank):
-            probabilities = model.predict(target_strength, ratings[team])
+            probabilities = model.predict(target_strength, strengths[team])
             outlook = ("favorite" if probabilities.win >= .6 else
                        "underdog" if probabilities.loss >= .6 else "toss_up")
-            return {"name": team, "npi": ratings[team], "rank": rank,
+            return {"name": team, "npi": ratings[team], "planning_npi": strengths[team], "rank": rank,
                     "record": records[team], "history": team_history(team),
                     "matchup_outlook": outlook,
                     "matchup_probabilities": asdict(probabilities)}
@@ -234,11 +236,12 @@ class AppState:
         target, fixed, _, _ = parse_plan(config, ratings)
         base_model = self.model_for(season, config["probability_model"])
         model = replace(base_model, slope=base_model.slope*config["probability_slope_scale"])
-        strength = config.get("target_recent_npi", ratings[target])
+        strengths = planning_ratings(season)
+        strength = config.get("target_recent_npi", strengths[target])
         baseline_games = []
         assumptions = []
         for game in fixed:
-            probabilities = game.probabilities or model.predict(strength, ratings[game.team])
+            probabilities = game.probabilities or model.predict(strength, strengths[game.team])
             outcome = game.result or max(probabilities.as_items(), key=lambda row: row[1])[0]
             baseline_games.append(SeasonGame(game.team, ratings[game.team], outcome))
             assumptions.append({"team": game.team, "result": outcome, "locked": game.result is not None})

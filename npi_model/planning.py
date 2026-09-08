@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .division_npi import DivisionGame
 from .schedule_simulator import OutcomeProbabilities
-from .seasons import DEFAULT_SEASON, season_path
+from .seasons import DEFAULT_SEASON, planning_ratings, season_path
 
 
 DEFAULT_BANDS = (("sub-40", None, 40), ("40-55", 40, 55),
@@ -167,7 +167,8 @@ def parse_plan(config, ratings):
         raise ValueError(f"unknown target: {target}")
     if config.get("band_scale", "rating") not in ("rating", "rank"):
         raise ValueError("band_scale must be 'rating' or 'rank'")
-    strength = config.get("target_recent_npi", ratings[target])
+    strengths = planning_ratings(config.get("season", DEFAULT_SEASON))
+    strength = config.get("target_recent_npi", strengths[target])
     if not isfinite(strength) or not 0 <= strength <= 100:
         raise ValueError("target_recent_npi must be finite and in 0–100")
     fixed = tuple(FixedGame(row["team"], row.get("category", "conference"),
@@ -212,7 +213,7 @@ def parse_plan(config, ratings):
             if team in config.get("excluded", []):
                 continue
             raise ValueError(f"candidate {team!r} is the target or a fixed opponent")
-        recent = float(row.get("recent_npi", ratings[team]))
+        recent = float(row.get("recent_npi", strengths.get(team, ratings[team])))
         if not isfinite(recent) or not 0 <= recent <= 100:
             raise ValueError("recent_npi must be finite and in the supported 0–100 domain")
         probabilities = probability_override(row.get("probabilities"))

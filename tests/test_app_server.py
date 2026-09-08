@@ -108,6 +108,8 @@ class TestAppState(unittest.TestCase):
         self.assertEqual(babson['matchup_outlook'],'toss_up')
         self.assertEqual(manhattanville['matchup_outlook'],'favorite')
         self.assertAlmostEqual(sum(babson['matchup_probabilities'].values()),1)
+        self.assertAlmostEqual(babson['planning_npi'],
+                               .5*54.824+.3*57.643+.2*55.85090430680861)
         with self.assertRaises(ValueError): self.state.bootstrap('../../private')
         with self.assertRaises(ValueError): self.state.validate({'season':True})
 

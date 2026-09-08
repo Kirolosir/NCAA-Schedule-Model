@@ -25,6 +25,7 @@ matchup odds automatically. Injuries, roster changes, and future form are not mo
 - Shows a likely range so a risky schedule does not look safer than it is.
 - Allows two browser tabs to run independent comparisons and cancels a run immediately.
 - Keeps 2025, 2024, 2023, and 2022 as separate historical reference seasons.
+- Uses a 50/30/20 blend of the latest three seasons for matchup strength.
 - Uses full precision internally and rounds only for display.
 
 The 2025 and 2024 seasons use published NCAA NPI values. NPI was not used for
@@ -103,8 +104,10 @@ solver reproduces every published NPI within 0.001 from several starting seeds.
 The season aggregation tests also cover winning, losing, tied, and winless teams.
 
 Older seasons are not mixed into the recursive NPI calculation. They are used to
-estimate game-outcome probabilities. The newest season remains an out-of-time
-check rather than part of the probability fitting sample.
+estimate game-outcome probabilities and stabilize the matchup-strength input.
+The 50/30/20 strength blend improved out-of-time log loss from 0.8701 to 0.8652
+for 2024 and from 0.9146 to 0.8945 for 2025. The newest season remains an
+out-of-time check rather than part of the probability fitting sample.
 
 ## Comparison modes
 

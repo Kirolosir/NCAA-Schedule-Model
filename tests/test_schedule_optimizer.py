@@ -16,7 +16,7 @@ from npi_model.schedule_optimizer import (
     ScheduleEvaluator, _draw, _uniforms, rank_schedules, risk_reward, summarize,
 )
 from npi_model.schedule_simulator import OutcomeProbabilities
-from npi_model.seasons import season_path
+from npi_model.seasons import load_season, planning_ratings, season_path
 
 
 class RealDataCase(unittest.TestCase):
@@ -102,6 +102,14 @@ class TestOutcomeModel(RealDataCase):
 
 
 class TestPlanningInputs(RealDataCase):
+    def test_planning_strength_uses_three_seasons_without_changing_division_rating(self):
+        strengths = planning_ratings("2024")
+        _, ratings_2023, _ = load_season("2023")
+        _, ratings_2022, _ = load_season("2022")
+        expected = .5*self.ratings["Amherst"]+.3*ratings_2023["Amherst"]+.2*ratings_2022["Amherst"]
+        self.assertAlmostEqual(strengths["Amherst"], expected)
+        self.assertEqual(self.ratings["Amherst"], 60)
+
     def test_default_real_pool_and_rating_band_scope(self):
         target, fixed, candidates, bands = parse_plan(default_config("2024"), self.ratings)
         self.assertEqual(target, "Amherst")
