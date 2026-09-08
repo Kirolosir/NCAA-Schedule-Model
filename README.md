@@ -142,8 +142,9 @@ deploys are disabled so a push cannot interrupt a coach's active comparison.
 The hosted version has no login or persistent database. Results belong to one
 signed browser session and disappear after a service restart. Named planning
 scenarios are stored in the browser that saved them; export any result that needs
-to be shared elsewhere. Render's free service may also take about a minute to wake
-after being idle.
+to be shared elsewhere. The results screen can download a spreadsheet, open a
+coach-ready report for printing or PDF, or save the complete JSON model output.
+Render's free service may also take about a minute to wake after being idle.
 
 Private planning inputs belong in `planning_inputs/`, generated reports in
 `reports/`, and other local source material in `local_data/`. Those directories,
