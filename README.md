@@ -18,6 +18,7 @@ matchup odds automatically. Injuries, roster changes, and future form are not mo
 - Ranks five-game schedules by projected season NPI.
 - Tracks every schedule against an editable target NPI.
 - Supports favorite, toss-up, underdog, and custom matchup outlooks.
+- Shows a data-based matchup starting point for every opponent.
 - Filters by required, preferred, unavailable, date, travel, and cost inputs.
 - Saves and reopens planning scenarios in the current browser.
 - Starts with a conservative .500 NESCAC baseline: four wins, two ties, and four losses.

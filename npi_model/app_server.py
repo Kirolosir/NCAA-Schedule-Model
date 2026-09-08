@@ -199,10 +199,17 @@ class AppState:
         diagnostics = historical_model(season)[1] if config["probability_model"] == "historical" else None
         ordered = sorted(ratings, key=lambda t: (-ratings[t], t))
         records = {row[0]: row[2] for row in data["teams"]}
+        target_strength = ratings[config["target_team"]]
+        def team_row(team, rank):
+            probabilities = model.predict(target_strength, ratings[team])
+            outlook = ("favorite" if probabilities.win >= .6 else
+                       "underdog" if probabilities.loss >= .6 else "toss_up")
+            return {"name": team, "npi": ratings[team], "rank": rank,
+                    "record": records[team], "history": team_history(team),
+                    "matchup_outlook": outlook,
+                    "matchup_probabilities": asdict(probabilities)}
         return {"config": config, "source": data["source"], "seasons": catalog(),
-                "teams": [{"name": t, "npi": ratings[t], "rank": i+1, "record": records[t],
-                           "history": team_history(t)}
-                          for i, t in enumerate(ordered)],
+                "teams": [team_row(team, rank) for rank, team in enumerate(ordered, 1)],
                 "model": asdict(model), "model_diagnostics": diagnostics,
                 "rating_range": [min(ratings.values()), max(ratings.values())],
                 "report": self.reference if season == DEFAULT_SEASON else None}

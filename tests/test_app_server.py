@@ -103,6 +103,11 @@ class TestAppState(unittest.TestCase):
         self.assertEqual(data['model']['method'],'prior_season_out_of_time')
         amherst=next(t for t in data['teams'] if t['name']=='Amherst')
         self.assertEqual([row['season'] for row in amherst['history']],['2025','2024','2023','2022'])
+        babson=next(t for t in data['teams'] if t['name']=='Babson')
+        manhattanville=next(t for t in data['teams'] if t['name']=='Manhattanville')
+        self.assertEqual(babson['matchup_outlook'],'toss_up')
+        self.assertEqual(manhattanville['matchup_outlook'],'favorite')
+        self.assertAlmostEqual(sum(babson['matchup_probabilities'].values()),1)
         with self.assertRaises(ValueError): self.state.bootstrap('../../private')
         with self.assertRaises(ValueError): self.state.validate({'season':True})
 
