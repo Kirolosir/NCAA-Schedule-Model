@@ -1,8 +1,9 @@
 """Planning inputs, explicit rating/rank bands, and historical graph loading."""
 
 from dataclasses import dataclass
+from itertools import combinations
 import json
-from math import isfinite
+from math import fsum, isfinite
 from pathlib import Path
 
 from .division_npi import DivisionGame
@@ -24,6 +25,11 @@ class Candidate:
     team: str
     recent_npi: float
     probabilities: OutcomeProbabilities | None = None
+    matchup: str = "model"
+    venue: str = "either"
+    available_dates: tuple[str, ...] = ()
+    travel_miles: float = 0.0
+    estimated_cost: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -82,7 +88,8 @@ def default_config(season=DEFAULT_SEASON):
         "bands": [{"label": label, "lower": low, "upper": high}
                   for label, low, high in DEFAULT_BANDS],
         "representatives_per_band": 2, "open_slots": 5, "required": [],
-        "excluded": [], "samples": 24, "validation_samples": 64,
+        "preferred": [], "excluded": [], "max_total_travel_miles": None,
+        "max_total_cost": None, "samples": 24, "validation_samples": 64,
         "insight_samples": 8, "top_n": 3, "seed": 20241027,
         "max_combinations": 500, "probability_slope_scale": 1.0 if season in ("2024", "2025") else 0.5,
         "convergence_tolerance": 1e-8, "analysis_mode": "thorough",
@@ -97,6 +104,61 @@ def probability_override(data):
     from .schedule_simulator import enumerate_independent_outcomes
     enumerate_independent_outcomes([p])  # shared strict probability validation
     return p
+
+
+def assign_dates(candidates):
+    dated = sorted((candidate for candidate in candidates if candidate.available_dates),
+                   key=lambda candidate: (len(candidate.available_dates), candidate.team))
+    assigned = {}
+    used = set()
+    def place(index):
+        if index == len(dated):
+            return True
+        candidate = dated[index]
+        for day in candidate.available_dates:
+            if day in used:
+                continue
+            assigned[candidate.team] = day
+            used.add(day)
+            if place(index+1):
+                return True
+            used.remove(day)
+            del assigned[candidate.team]
+        return False
+    return assigned if place(0) else None
+
+
+def candidate_schedules(candidates, slots, required=(), preferred=(), *,
+                        max_travel_miles=None, max_cost=None):
+    by_team = {candidate.team: candidate for candidate in candidates}
+    required = set(required)
+    preferred = set(preferred)
+    optional = sorted(set(by_team)-required)
+    schedules = []
+    for extra in combinations(optional, slots-len(required)):
+        opponents = tuple(sorted(required | set(extra)))
+        selected = [by_team[team] for team in opponents]
+        dates = assign_dates(selected)
+        if dates is None:
+            continue
+        travel = fsum(candidate.travel_miles for candidate in selected)
+        cost = fsum(candidate.estimated_cost for candidate in selected)
+        if max_travel_miles is not None and travel > max_travel_miles:
+            continue
+        if max_cost is not None and cost > max_cost:
+            continue
+        schedules.append({"opponents": opponents, "logistics": {
+            "preferred_count": len(set(opponents) & preferred),
+            "total_travel_miles": travel, "total_cost": cost,
+            "games": [{"team": candidate.team,
+                       "priority": "required" if candidate.team in required else
+                                   "preferred" if candidate.team in preferred else "available",
+                       "venue": candidate.venue, "date": dates.get(candidate.team),
+                       "available_dates": list(candidate.available_dates),
+                       "travel_miles": candidate.travel_miles,
+                       "estimated_cost": candidate.estimated_cost}
+                      for candidate in selected]}})
+    return schedules
 
 
 def parse_plan(config, ratings):
@@ -153,7 +215,24 @@ def parse_plan(config, ratings):
         recent = float(row.get("recent_npi", ratings[team]))
         if not isfinite(recent) or not 0 <= recent <= 100:
             raise ValueError("recent_npi must be finite and in the supported 0–100 domain")
-        candidates.append(Candidate(team, recent, probability_override(row.get("probabilities"))))
+        probabilities = probability_override(row.get("probabilities"))
+        matchup = row.get("matchup", "custom" if probabilities else "model")
+        if matchup not in ("model", "favorite", "toss_up", "underdog", "custom"):
+            raise ValueError("matchup must be model, favorite, toss_up, underdog, or custom")
+        if (matchup == "model") != (probabilities is None):
+            raise ValueError("matchup presets and custom outlooks need outcome probabilities")
+        venue = row.get("venue", "either")
+        if venue not in ("home", "away", "either"):
+            raise ValueError("venue must be home, away, or either")
+        dates = row.get("available_dates", [])
+        if not isinstance(dates, list) or any(not isinstance(day, str) for day in dates):
+            raise ValueError("available_dates must be a list of dates")
+        travel = float(row.get("travel_miles", 0))
+        cost = float(row.get("estimated_cost", 0))
+        if not isfinite(travel) or travel < 0 or not isfinite(cost) or cost < 0:
+            raise ValueError("travel miles and estimated cost must be nonnegative")
+        candidates.append(Candidate(team, recent, probabilities, matchup, venue,
+                                    tuple(sorted(set(dates))), travel, cost))
     if len({c.team for c in candidates}) != len(candidates):
         raise ValueError("duplicate candidates")
     return target, fixed, tuple(sorted(candidates, key=lambda c: c.team)), band_rows

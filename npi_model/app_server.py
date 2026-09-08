@@ -2,6 +2,7 @@
 
 import argparse
 from dataclasses import asdict, replace
+from datetime import date
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -15,7 +16,7 @@ from uuid import uuid4
 
 from .game_value import calculate_game_value
 from .outcome_model import OutcomeModel
-from .planning import default_config, parse_plan
+from .planning import candidate_schedules, default_config, parse_plan
 from .schedule_optimizer import rank_schedules
 from .season_npi import SeasonGame, calculate_season_npi
 from .seasons import DEFAULT_SEASON, catalog, load_season, team_history
@@ -51,10 +52,10 @@ def validate_config(raw, ratings):
         raise ValueError("Choose the historical or retrospective probability model")
     if config["probability_model"] == "historical" and season not in ("2024", "2025"):
         raise ValueError("The historical probability model requires at least one prior-season transition")
-    for key in ("fixed_games", "candidates", "bands", "required", "excluded"):
+    for key in ("fixed_games", "candidates", "bands", "required", "preferred", "excluded"):
         if not isinstance(config[key], list):
             raise ValueError(f"{key} must be a list")
-    for key in ("required", "excluded"):
+    for key in ("required", "preferred", "excluded"):
         if any(not isinstance(t, str) for t in config[key]):
             raise ValueError(f"{key} must contain team names")
     if not isinstance(config["target_team"], str):
@@ -65,7 +66,9 @@ def validate_config(raw, ratings):
         for row in config[key]:
             if not isinstance(row, dict) or not isinstance(row.get("team"), str):
                 raise ValueError(f"Each entry in {key} needs a team name")
-            allowed = {"team", "category", "result", "probabilities"} if key == "fixed_games" else {"team", "recent_npi", "probabilities"}
+            allowed = {"team", "category", "result", "probabilities"} if key == "fixed_games" else {
+                "team", "recent_npi", "probabilities", "matchup", "venue",
+                "available_dates", "travel_miles", "estimated_cost"}
             if set(row)-allowed:
                 raise ValueError(f"Unknown opponent setting for {row['team']}")
             if "recent_npi" in row:
@@ -76,6 +79,24 @@ def validate_config(raw, ratings):
                     raise ValueError("Probabilities need win, tie, and loss")
                 for outcome, value in p.items():
                     number(value, f"{outcome} probability", 0, 1)
+            if key == "candidates":
+                if row.get("matchup", "custom" if row.get("probabilities") else "model") not in (
+                        "model", "favorite", "toss_up", "underdog", "custom"):
+                    raise ValueError("Choose a valid matchup outlook")
+                if row.get("venue", "either") not in ("home", "away", "either"):
+                    raise ValueError("Venue must be home, away, or either")
+                dates = row.get("available_dates", [])
+                if not isinstance(dates, list) or len(dates) > 20:
+                    raise ValueError("Available dates must be a list with at most 20 dates")
+                for day in dates:
+                    if not isinstance(day, str):
+                        raise ValueError("Available dates must use YYYY-MM-DD")
+                    try:
+                        date.fromisoformat(day)
+                    except ValueError as error:
+                        raise ValueError("Available dates must use YYYY-MM-DD") from error
+                number(row.get("travel_miles", 0), "Travel miles", 0, 100000)
+                number(row.get("estimated_cost", 0), "Estimated cost", 0, 10000000)
     if len(config["bands"]) > 20:
         raise ValueError("Use at most 20 bands")
     for band in config["bands"]:
@@ -94,22 +115,36 @@ def validate_config(raw, ratings):
     number(config["probability_slope_scale"], "Probability strength", .05, 2)
     number(config["convergence_tolerance"], "Convergence tolerance", 1e-12, 1e-6)
     number(config["target_npi"], "Target NPI", 0, 100)
+    if config["max_total_travel_miles"] is not None:
+        number(config["max_total_travel_miles"], "Maximum total travel", 0, 500000)
+    if config["max_total_cost"] is not None:
+        number(config["max_total_cost"], "Maximum total cost", 0, 50000000)
     if "target_recent_npi" in config:
         number(config["target_recent_npi"], "Target recent NPI", 0, 100)
     target, fixed, candidates, bands = parse_plan(config, ratings)
-    required = set(config["required"])
-    if not required <= {c.team for c in candidates}:
+    required, preferred, excluded = (set(config[key]) for key in ("required", "preferred", "excluded"))
+    if (required & preferred) or (required & excluded) or (preferred & excluded):
+        raise ValueError("An opponent can only be required, preferred, available, or unavailable")
+    names = {c.team for c in candidates}
+    if not required <= names:
         raise ValueError("Required opponents must be in the active candidate pool")
+    if not preferred <= names:
+        raise ValueError("Preferred opponents must be in the active candidate pool")
     slots = config["open_slots"]
     if len(required) > slots:
         raise ValueError("More opponents are required than there are open slots")
     if len(candidates) < slots:
         raise ValueError(f"Choose at least {slots} candidates; this pool has {len(candidates)}")
-    combinations = comb(len(candidates)-len(required), slots-len(required))
-    if combinations > config["max_combinations"]:
-        raise ValueError(f"This pool creates {combinations:,} schedules. Narrow it or require opponents (limit {config['max_combinations']}).")
+    unfiltered = comb(len(candidates)-len(required), slots-len(required))
+    if unfiltered > config["max_combinations"]:
+        raise ValueError(f"This pool creates {unfiltered:,} schedules. Narrow it or require opponents (limit {config['max_combinations']}).")
+    schedules = candidate_schedules(
+        candidates, slots, required, preferred,
+        max_travel_miles=config["max_total_travel_miles"], max_cost=config["max_total_cost"])
+    if not schedules:
+        raise ValueError("No schedule fits the selected dates, travel limit, and budget")
     return config, {"target": target, "fixed_count": len(fixed), "candidate_count": len(candidates),
-                    "combinations": combinations, "bands": bands,
+                    "combinations": len(schedules), "unfiltered_combinations": unfiltered, "bands": bands,
                     "candidates": [asdict(c) for c in candidates]}
 
 
@@ -187,7 +222,7 @@ class AppState:
         config = dict(raw)
         fixed_names = {g.get("team") for g in config.get("fixed_games", []) if isinstance(g, dict)}
         spare = next(t for t in ratings if t not in fixed_names and t != config.get("target_team", "Amherst"))
-        config.update(mode="teams", candidates=[{"team": spare}], required=[], excluded=[], open_slots=1)
+        config.update(mode="teams", candidates=[{"team": spare}], required=[], preferred=[], excluded=[], open_slots=1)
         config, _ = validate_config(config, ratings)
         target, fixed, _, _ = parse_plan(config, ratings)
         base_model = self.model_for(season, config["probability_model"])

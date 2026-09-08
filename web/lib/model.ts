@@ -1,13 +1,18 @@
 export type Outcome = 'win' | 'tie' | 'loss';
 export type Probabilities = Record<Outcome, number>;
-export type Candidate = {team: string; recent_npi?: number; probabilities?: Probabilities};
+export type Matchup = 'model' | 'favorite' | 'toss_up' | 'underdog' | 'custom';
+export type Venue = 'home' | 'away' | 'either';
+export type Priority = 'required' | 'preferred' | 'available';
+export type Candidate = {team: string; recent_npi?: number; probabilities?: Probabilities; matchup?: Matchup;
+  venue?: Venue; available_dates?: string[]; travel_miles?: number; estimated_cost?: number};
 export type FixedGame = {team: string; category?: string; result?: Outcome; probabilities?: Probabilities};
 export type Band = {label: string; lower: number | null; upper: number | null; member_count?: number; representatives?: string[]};
 export type Config = {
   season: string; probability_model: 'historical' | 'retrospective';
   target_team: string; mode: 'teams' | 'bands'; band_scale: 'rating' | 'rank';
   fixed_games: FixedGame[]; candidates: Candidate[]; bands: Band[];
-  representatives_per_band: number; open_slots: number; required: string[]; excluded: string[];
+  representatives_per_band: number; open_slots: number; required: string[]; preferred: string[]; excluded: string[];
+  max_total_travel_miles: number | null; max_total_cost: number | null;
   samples: number; validation_samples: number; insight_samples: number; top_n: number;
   seed: number; max_combinations: number; probability_slope_scale: number; convergence_tolerance: number;
   analysis_mode: 'quick' | 'standard' | 'thorough'; include_standalone_insights: boolean;
@@ -16,7 +21,9 @@ export type Config = {
 export type Summary = {mean: number; p10: number; p90: number; samples: number; mean_standard_error: number; mean_ci95: [number, number]};
 export type Risk = {team: string; probabilities: Probabilities; expected_impact: Summary; swing_win_minus_loss: number}
   & Record<Outcome, {npi: Summary; impact: Summary}>;
-export type Schedule = {rank: number; opponents: string[]; projection: Summary; impact_vs_fixed_slate: Summary;
+export type ScheduledGame = {team:string; priority:Priority; venue:Venue; date:string|null; available_dates:string[]; travel_miles:number; estimated_cost:number};
+export type Logistics = {preferred_count:number; total_travel_miles:number; total_cost:number; games:ScheduledGame[]};
+export type Schedule = {rank: number; opponents: string[]; projection: Summary; impact_vs_fixed_slate: Summary; logistics:Logistics;
   target_npi: number; target_gap: Summary; target_hit_rate: number;
   paired_gap_from_leader: Summary; stress_all_unlocked_wins: number; stress_all_unlocked_losses: number;
   opponent_impacts: Risk[]; reasoning: string[]};
@@ -31,7 +38,7 @@ export type Bootstrap = {config: Config; teams: Team[]; source: SeasonSource; se
   deployment?: {hosted: boolean; max_job_minutes: number};
   rating_range:[number,number]; model_diagnostics?:{holdout_log_loss:number;constant_holdout_log_loss:number;recent_only_holdout_log_loss:number;note:string};
   model: {slope: number; tie_log_weight: number; fit_log_loss: number; sample_count: number;method:string;training_seasons:string[];holdout_season:string|null;out_of_time_log_loss:number|null}};
-export type Validation = {candidate_count: number; combinations: number; bands: Band[]; candidates: Candidate[]};
+export type Validation = {candidate_count: number; combinations: number; unfiltered_combinations:number; bands: Band[]; candidates: Candidate[]};
 export type Job = {id: string; status: string; message: string; progress: number; report?: Report; config: Config};
 export type Explore = {opponent_npi: number; baseline_npi: number; probabilities: Probabilities;
   outcomes: Record<Outcome, {npi: number; impact: number; game_value?: {total: number; quality_win_bonus: number}}>;

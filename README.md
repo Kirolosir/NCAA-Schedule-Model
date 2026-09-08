@@ -7,8 +7,9 @@ Division III schedule graph.
 
 [Open the hosted app](https://ncaa-schedule-lab.onrender.com)
 
-This is a planning tool, not a prediction guarantee. Opponent availability,
-travel, injuries, roster changes, and future form are not modeled.
+This is a planning tool, not a prediction guarantee. Availability, venue, dates,
+travel, and cost can be entered as scheduling constraints, but they do not alter
+matchup odds automatically. Injuries, roster changes, and future form are not modeled.
 
 ## What the app does
 
@@ -16,6 +17,9 @@ travel, injuries, roster changes, and future form are not modeled.
 - Shows the effect of a win, tie, or loss against one opponent.
 - Ranks five-game schedules by projected season NPI.
 - Tracks every schedule against an editable target NPI.
+- Supports favorite, toss-up, underdog, and custom matchup outlooks.
+- Filters by required, preferred, unavailable, date, travel, and cost inputs.
+- Saves and reopens planning scenarios in the current browser.
 - Starts with a conservative .500 NESCAC baseline: four wins, two ties, and four losses.
 - Shows a likely range so a risky schedule does not look safer than it is.
 - Allows two browser tabs to run independent comparisons and cancels a run immediately.
@@ -132,8 +136,9 @@ uses one Gunicorn worker because calculation jobs are kept in memory. Automatic
 deploys are disabled so a push cannot interrupt a coach's active comparison.
 
 The hosted version has no login or persistent database. Results belong to one
-signed browser session and disappear after a service restart. Export any result
-that needs to be kept. Render's free service may also take about a minute to wake
+signed browser session and disappear after a service restart. Named planning
+scenarios are stored in the browser that saved them; export any result that needs
+to be shared elsewhere. Render's free service may also take about a minute to wake
 after being idle.
 
 Private planning inputs belong in `planning_inputs/`, generated reports in

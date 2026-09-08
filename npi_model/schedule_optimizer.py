@@ -2,7 +2,6 @@
 
 from dataclasses import asdict, replace
 from hashlib import sha256
-from itertools import combinations
 from math import comb, fsum, isfinite, sqrt
 from random import Random
 from statistics import mean, stdev
@@ -12,7 +11,7 @@ from .fast_division import CompiledDivision
 from .game_value import calculate_game_value
 from .outcome_model import OutcomeModel
 from .temporal_model import planning_model
-from .planning import Candidate, parse_plan
+from .planning import Candidate, candidate_schedules, parse_plan
 from .season_npi import SeasonGame, calculate_season_npi
 
 
@@ -229,14 +228,24 @@ def rank_schedules(games, ratings, config, *, progress=None):
     if not isfinite(tolerance) or tolerance <= 0 or tolerance > 1e-6:
         raise ValueError("convergence_tolerance must be in (0, 1e-6]")
     required = set(config.get("required", []))
+    preferred = set(config.get("preferred", []))
     names = {c.team for c in candidates}
     if not required <= names or len(required) > slots:
         raise ValueError("required teams must be eligible candidates and fit the open slots")
-    total = comb(len(candidates)-len(required), slots-len(required))
+    if not preferred <= names or required & preferred:
+        raise ValueError("preferred teams must be eligible candidates and cannot also be required")
+    unfiltered_total = comb(len(candidates)-len(required), slots-len(required))
     if not isinstance(config["max_combinations"], int) or config["max_combinations"] < 1:
         raise ValueError("max_combinations must be a positive integer")
-    if total > config["max_combinations"]:
-        raise ValueError(f"{total} combinations exceeds max_combinations; narrow the pool or raise the limit")
+    if unfiltered_total > config["max_combinations"]:
+        raise ValueError(f"{unfiltered_total} combinations exceeds max_combinations; narrow the pool or raise the limit")
+    plans = candidate_schedules(
+        candidates, slots, required, preferred,
+        max_travel_miles=config.get("max_total_travel_miles"),
+        max_cost=config.get("max_total_cost"))
+    total = len(plans)
+    if not total:
+        raise ValueError("no schedule fits the selected dates, travel limit, and budget")
     if progress:
         progress("Loading outcome probabilities and division graph")
     fitted = planning_model(games, ratings, config)
@@ -253,14 +262,21 @@ def rank_schedules(games, ratings, config, *, progress=None):
     screening_sample = evaluator.screening_sample if fast else evaluator.sample
     baseline = screening_sample((), samples=config["samples"], seed=seed)
     screened = []
-    for i, optional in enumerate(combinations(sorted(names-required), slots-len(required)), 1):
-        teams = tuple(sorted(required | set(optional)))
+    for i, plan in enumerate(plans, 1):
+        teams = plan["opponents"]
         values = screening_sample(teams, samples=config["samples"], seed=seed)
         screened.append({"opponents": teams, "screening": summarize(values),
-                         "screening_impact": summarize([x-y for x, y in zip(values, baseline)])})
+                         "screening_impact": summarize([x-y for x, y in zip(values, baseline)]),
+                         "logistics": plan["logistics"]})
         if progress:
             progress(f"Scored schedule {i}/{total}: mean NPI {mean(values):.3f}")
-    screened.sort(key=lambda row: (-row["screening"]["mean"], row["opponents"]))
+    def schedule_key(row, summary):
+        score = row[summary]["mean"]
+        logistics = row["logistics"]
+        return (-round(score, 3), -logistics["preferred_count"],
+                logistics["total_cost"], logistics["total_travel_miles"],
+                -score, row["opponents"])
+    screened.sort(key=lambda row: schedule_key(row, "screening"))
     finalist_count = top_n+1 if mode == "quick" else top_n*2
     finalists = screened[:min(len(screened), max(finalist_count, top_n))]
     validation_seed = seed+1000003
@@ -275,7 +291,7 @@ def rank_schedules(games, ratings, config, *, progress=None):
         row["_values"] = values
         if progress:
             progress(f"Validated finalist {i}/{len(finalists)} with independent samples")
-    finalists.sort(key=lambda row: (-row["projection"]["mean"], row["opponents"]))
+    finalists.sort(key=lambda row: schedule_key(row, "projection"))
     best = finalists[0]["_values"]
     for row in finalists:
         row["paired_gap_from_leader"] = summarize([x-y for x, y in zip(best, row.pop("_values"))])
@@ -293,6 +309,9 @@ def rank_schedules(games, ratings, config, *, progress=None):
             f"Largest conditional loss downside: {risk['team']}.",
             "Marginal impacts compare the full proposed slate to the same slate minus one game; they are not additive.",
         ]
+        if row["logistics"]["preferred_count"]:
+            row["reasoning"].append(
+                f"Includes {row['logistics']['preferred_count']} preferred opponent(s).")
         if progress:
             progress(f"Explained finalist {i}/{len(top)}: win/tie/loss impacts for every open opponent")
     standalone = []
@@ -323,12 +342,12 @@ def rank_schedules(games, ratings, config, *, progress=None):
         "limitations": [
             "Planning replay of the supplied division graph; other teams' historical games/results stay fixed. Not a validated future-season forecast.",
             "Old target games are removed reciprocally; proposed games are added to opponents' historical schedules. Opponents' replacement fixtures are unknown.",
-            "Default candidates are historical/reference examples; availability, travel and dates are unverified.",
+            "Default candidates are historical/reference examples. Entered dates, travel, and cost are planning assumptions and are not independently verified.",
             "Fixed means opponent locked; outcomes remain uncertain unless result is supplied. All nonconference decisions are open by default.",
             "Recent NPI overrides affect pregame probabilities only. The historical result graph determines converged NPI; changing an iteration seed cannot change a fixed point.",
             probability_note,
             f"Probability slope scale={scale} is a planning sensitivity, not a calibrated uncertainty estimate. Override probabilities or vary this setting.",
-            "Game outcomes are conditionally independent; no injury, roster, travel, date, or common team-form uncertainty is modeled.",
+            "Game outcomes are conditionally independent; no injury, roster, or common team-form uncertainty is modeled. Venue and travel do not change win probabilities unless the matchup outlook is adjusted.",
             "P10–P90 describes simulated season spread. Mean CI95 describes Monte Carlo error conditional on the model; neither includes model uncertainty.",
             "All-win/all-loss are stress scenarios, not proven global NPI extrema. Screening ranks all allowed combinations; independent validation covers only the displayed shortlist.",
             "Banded graph projections use selected real representatives. They do not evaluate every team or assume a uniform rating distribution within a band.",

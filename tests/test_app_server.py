@@ -53,6 +53,37 @@ class TestAppValidation(unittest.TestCase):
             validate_config({'candidates':[{'team':'Babson','probabilities':
                              {'win':.8,'tie':.2,'loss':.2}}]},self.ratings)
 
+    def test_practical_planning_fields_and_constraints(self):
+        config=default_config()
+        config.update(open_slots=2, required=[config['candidates'][0]['team']],
+                      preferred=[config['candidates'][1]['team']],
+                      max_total_travel_miles=500, max_total_cost=5000)
+        config['candidates'][0].update(matchup='favorite', venue='home',
+            probabilities={'win':.65,'tie':.20,'loss':.15},
+            available_dates=['2027-09-01'], travel_miles=0, estimated_cost=500)
+        config['candidates'][1].update(matchup='toss_up', venue='away',
+            probabilities={'win':.40,'tie':.20,'loss':.40},
+            available_dates=['2027-09-01','2027-09-08'], travel_miles=120,
+            estimated_cost=1500)
+        _, summary=validate_config(config,self.ratings)
+        self.assertGreater(summary['combinations'],0)
+        self.assertLessEqual(summary['combinations'],summary['unfiltered_combinations'])
+        parsed=next(row for row in summary['candidates'] if row['team']==config['candidates'][0]['team'])
+        self.assertEqual(parsed['venue'],'home')
+        self.assertEqual(parsed['matchup'],'favorite')
+        for patch in ({'venue':'neutral'}, {'available_dates':['09/01/27']},
+                      {'estimated_cost':-1}, {'matchup':'favorite'}):
+            bad=default_config();bad['candidates'][0].update(patch)
+            with self.subTest(patch=patch),self.assertRaises(ValueError):
+                validate_config(bad,self.ratings)
+        with self.assertRaises(ValueError):
+            validate_config({'required':['Babson'],'preferred':['Babson']},self.ratings)
+        conflict=default_config();conflict.update(open_slots=2,required=[conflict['candidates'][0]['team']])
+        conflict['candidates'][0]['available_dates']=['2027-09-01']
+        for row in conflict['candidates'][1:]:row['available_dates']=['2027-09-01']
+        with self.assertRaisesRegex(ValueError,'No schedule fits'):
+            validate_config(conflict,self.ratings)
+
 
 class TestAppState(unittest.TestCase):
     @classmethod

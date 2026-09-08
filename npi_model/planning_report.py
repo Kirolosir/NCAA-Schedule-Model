@@ -12,7 +12,7 @@ def render_report(report):
              f"{len(report['screening'])} combinations screened with {c['samples']} draws each. "
              f"{len(report['validated_finalists'])} finalists validated with {c['validation_samples']} independent draws each.", "",
              f"Target season NPI: {c['target_npi']:.3f}.", "",
-             "Schedules below are ordered by the validated mean. P10–P90 is simulated season spread; "
+             "Schedules are ordered by displayed mean NPI, then preferred opponents and lower practical cost. P10–P90 is simulated season spread; "
              "SE is sampling error in the mean. Close estimates can change order with more samples or different probabilities.", "",
              "| Order | Nonconference opponents | Mean NPI | Target gap | Reaches target | P10–P90 | Lift vs fixed slate |",
              "|---:|---|---:|---:|---:|---:|---:|"]
@@ -23,8 +23,17 @@ def render_report(report):
                      f"{p['p10']:.3f}–{p['p90']:.3f} | "
                      f"{row['impact_vs_fixed_slate']['mean']:+.3f} |")
     for row in report["top_schedules"]:
+        logistics = row["logistics"]
         lines += ["", f"## Schedule {row['rank']}: where the value and risk sit", "",
                   *row["reasoning"], "",
+                  f"Planning total: {logistics['total_travel_miles']:,.0f} travel miles; "
+                  f"${logistics['total_cost']:,.0f} estimated cost; "
+                  f"{logistics['preferred_count']} preferred opponent(s).", "",
+                  "| Opponent | Status | Venue | Date | Travel miles | Cost |",
+                  "|---|---|---|---|---:|---:|",
+                  *[f"| {game['team']} | {game['priority']} | {game['venue']} | "
+                    f"{game['date'] or 'Open'} | {game['travel_miles']:,.0f} | "
+                    f"${game['estimated_cost']:,.0f} |" for game in logistics["games"]], "",
                   f"All unlocked results forced to wins: {row['stress_all_unlocked_wins']:.3f}; "
                   f"forced to losses: {row['stress_all_unlocked_losses']:.3f}. "
                   "These are stress cases, not mathematical bounds.", "",

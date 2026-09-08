@@ -8,8 +8,8 @@ from npi_model.division_npi import DivisionGame, NPIConvergenceError, iterate_di
 from npi_model.fast_division import CompiledDivision
 from npi_model.outcome_model import OutcomeModel
 from npi_model.planning import (
-    Candidate, FixedGame, band_members, default_config, load_graph, parse_plan,
-    probability_override, representatives,
+    Candidate, FixedGame, assign_dates, band_members, candidate_schedules,
+    default_config, load_graph, parse_plan, probability_override, representatives,
 )
 from npi_model.planning_report import render_report
 from npi_model.schedule_optimizer import (
@@ -165,6 +165,29 @@ class TestPlanningInputs(RealDataCase):
         with self.assertRaises(ValueError):
             probability_override({"win": .8, "tie": .3, "loss": .1})
 
+    def test_dates_priorities_travel_and_cost_filter_schedules(self):
+        candidates = (
+            Candidate("Babson", self.ratings["Babson"], venue="home",
+                      available_dates=("2027-09-01",), estimated_cost=250),
+            Candidate("Springfield", self.ratings["Springfield"], venue="away",
+                      available_dates=("2027-09-01", "2027-09-08"), travel_miles=90,
+                      estimated_cost=1200),
+            Candidate("Worcester St.", self.ratings["Worcester St."], venue="away",
+                      available_dates=("2027-09-01",), travel_miles=150,
+                      estimated_cost=1800),
+        )
+        self.assertEqual(assign_dates(candidates[:2]),
+                         {"Babson": "2027-09-01", "Springfield": "2027-09-08"})
+        self.assertIsNone(assign_dates((candidates[0], candidates[2])))
+        plans = candidate_schedules(candidates, 2, required=["Babson"],
+                                    preferred=["Springfield"], max_travel_miles=100,
+                                    max_cost=2000)
+        self.assertEqual([plan["opponents"] for plan in plans], [("Babson", "Springfield")])
+        self.assertEqual(plans[0]["logistics"]["preferred_count"], 1)
+        self.assertEqual(plans[0]["logistics"]["total_travel_miles"], 90)
+        self.assertEqual(plans[0]["logistics"]["total_cost"], 1450)
+        self.assertEqual(plans[0]["logistics"]["games"][1]["date"], "2027-09-08")
+
 
 class TestScheduleScoring(RealDataCase):
     @classmethod
@@ -247,6 +270,8 @@ class TestScheduleScoring(RealDataCase):
         self.assertEqual(first["projection"]["mean_standard_error"], 0.0)
         self.assertEqual(second["paired_gap_from_leader"]["mean"],
                          first["projection"]["mean"]-second["projection"]["mean"])
+        self.assertEqual(first["logistics"]["total_travel_miles"], 0)
+        self.assertEqual(len(first["logistics"]["games"]), 1)
         self.assertEqual(json.loads(json.dumps(report, allow_nan=False))["top_schedules"][0]["projection"],
                          first["projection"])
         text = render_report(report)
