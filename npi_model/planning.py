@@ -67,12 +67,17 @@ def representatives(members, count=2):
 
 
 def default_config(season=DEFAULT_SEASON):
-    season_path(season)
+    _, ratings, _ = load_graph(season_path(season))
+    ordered = sorted(CONFERENCE, key=lambda team: (ratings[team], team))
+    results = {team: "win" if i < 4 else "tie" if i < 6 else "loss"
+               for i, team in enumerate(ordered)}
     return {
         "season": season,
         "probability_model": "historical" if season in ("2024", "2025") else "retrospective",
-        "target_team": "Amherst", "mode": "teams", "band_scale": "rating",
-        "fixed_games": [{"team": team, "category": "conference"} for team in CONFERENCE],
+        "target_team": "Amherst", "target_npi": 60.0,
+        "mode": "teams", "band_scale": "rating",
+        "fixed_games": [{"team": team, "category": "conference", "result": results[team]}
+                        for team in CONFERENCE],
         "candidates": [{"team": team} for team in DEFAULT_POOL],
         "bands": [{"label": label, "lower": low, "upper": high}
                   for label, low, high in DEFAULT_BANDS],

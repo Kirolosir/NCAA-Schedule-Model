@@ -11,14 +11,16 @@ def render_report(report):
              f"{len(report['candidates'])} candidate profiles. "
              f"{len(report['screening'])} combinations screened with {c['samples']} draws each. "
              f"{len(report['validated_finalists'])} finalists validated with {c['validation_samples']} independent draws each.", "",
+             f"Target season NPI: {c['target_npi']:.3f}.", "",
              "Schedules below are ordered by the validated mean. P10–P90 is simulated season spread; "
              "SE is sampling error in the mean. Close estimates can change order with more samples or different probabilities.", "",
-             "| Order | Nonconference opponents | Mean NPI | P10–P90 | Mean SE | Lift vs fixed slate |",
-             "|---:|---|---:|---:|---:|---:|"]
+             "| Order | Nonconference opponents | Mean NPI | Target gap | Reaches target | P10–P90 | Lift vs fixed slate |",
+             "|---:|---|---:|---:|---:|---:|---:|"]
     for row in report["top_schedules"]:
         p = row["projection"]
         lines.append(f"| {row['rank']} | {', '.join(row['opponents'])} | {p['mean']:.3f} | "
-                     f"{p['p10']:.3f}–{p['p90']:.3f} | {p['mean_standard_error']:.3f} | "
+                     f"{row['target_gap']['mean']:+.3f} | {row['target_hit_rate']:.0%} | "
+                     f"{p['p10']:.3f}–{p['p90']:.3f} | "
                      f"{row['impact_vs_fixed_slate']['mean']:+.3f} |")
     for row in report["top_schedules"]:
         lines += ["", f"## Schedule {row['rank']}: where the value and risk sit", "",

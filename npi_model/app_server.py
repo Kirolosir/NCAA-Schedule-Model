@@ -93,6 +93,7 @@ def validate_config(raw, ratings):
         number(config[key], key, low, high, integer=True)
     number(config["probability_slope_scale"], "Probability strength", .05, 2)
     number(config["convergence_tolerance"], "Convergence tolerance", 1e-12, 1e-6)
+    number(config["target_npi"], "Target NPI", 0, 100)
     if "target_recent_npi" in config:
         number(config["target_recent_npi"], "Target recent NPI", 0, 100)
     target, fixed, candidates, bands = parse_plan(config, ratings)

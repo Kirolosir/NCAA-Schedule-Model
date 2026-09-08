@@ -15,6 +15,8 @@ travel, injuries, roster changes, and future form are not modeled.
 - Compares named opponents or NPI/rank bands.
 - Shows the effect of a win, tie, or loss against one opponent.
 - Ranks five-game schedules by projected season NPI.
+- Tracks every schedule against an editable target NPI.
+- Starts with a conservative .500 NESCAC baseline: four wins, two ties, and four losses.
 - Shows a likely range so a risky schedule does not look safer than it is.
 - Keeps 2025, 2024, 2023, and 2022 as separate historical reference seasons.
 - Uses full precision internally and rounds only for display.

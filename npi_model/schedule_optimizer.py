@@ -260,6 +260,9 @@ def rank_schedules(games, ratings, config, *, progress=None):
         values = evaluator.sample(row["opponents"], samples=config["validation_samples"], seed=validation_seed)
         row["projection"] = summarize(values)
         row["impact_vs_fixed_slate"] = summarize([x-y for x, y in zip(values, baseline_validation)])
+        row["target_npi"] = config["target_npi"]
+        row["target_gap"] = summarize([x-config["target_npi"] for x in values])
+        row["target_hit_rate"] = sum(x >= config["target_npi"] for x in values)/len(values)
         row["_values"] = values
         if progress:
             progress(f"Validated finalist {i}/{len(finalists)} with independent samples")

@@ -27,7 +27,8 @@ class TestAppValidation(unittest.TestCase):
 
     def test_rejects_strings_booleans_and_nonfinite_numbers(self):
         for key, value in [('samples', True), ('samples', '8'), ('open_slots', 1.5),
-                           ('seed', float('nan')), ('probability_slope_scale', float('inf'))]:
+                           ('seed', float('nan')), ('probability_slope_scale', float('inf')),
+                           ('target_npi', 101)]:
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 validate_config({key:value}, self.ratings)
         for bad in ('0.5', True, -1, float('nan')):

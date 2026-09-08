@@ -11,12 +11,13 @@ export type Config = {
   samples: number; validation_samples: number; insight_samples: number; top_n: number;
   seed: number; max_combinations: number; probability_slope_scale: number; convergence_tolerance: number;
   analysis_mode: 'quick' | 'standard' | 'thorough'; include_standalone_insights: boolean;
-  target_recent_npi?: number;
+  target_npi: number; target_recent_npi?: number;
 };
 export type Summary = {mean: number; p10: number; p90: number; samples: number; mean_standard_error: number; mean_ci95: [number, number]};
 export type Risk = {team: string; probabilities: Probabilities; expected_impact: Summary; swing_win_minus_loss: number}
   & Record<Outcome, {npi: Summary; impact: Summary}>;
 export type Schedule = {rank: number; opponents: string[]; projection: Summary; impact_vs_fixed_slate: Summary;
+  target_npi: number; target_gap: Summary; target_hit_rate: number;
   paired_gap_from_leader: Summary; stress_all_unlocked_wins: number; stress_all_unlocked_losses: number;
   opponent_impacts: Risk[]; reasoning: string[]};
 export type Report = {config: Config; target_team: string; top_schedules: Schedule[]; validated_finalists: Schedule[];

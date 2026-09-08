@@ -94,7 +94,11 @@ class TestPlanningInputs(RealDataCase):
         target, fixed, candidates, bands = parse_plan(default_config("2024"), self.ratings)
         self.assertEqual(target, "Amherst")
         self.assertEqual(len(fixed), 10)
-        self.assertTrue(all(g.result is None for g in fixed))
+        self.assertEqual([sum(g.result == result for g in fixed) for result in ("win", "tie", "loss")], [4, 2, 4])
+        by_result = {result: [self.ratings[g.team] for g in fixed if g.result == result]
+                     for result in ("win", "tie", "loss")}
+        self.assertLessEqual(max(by_result["win"]), min(by_result["tie"]))
+        self.assertLessEqual(max(by_result["tie"]), min(by_result["loss"]))
         self.assertEqual(len(candidates), 7)
         self.assertEqual([b["member_count"] for b in bands][-2:], [0, 0])
         self.assertEqual(min(self.ratings.values()), 35.321)
@@ -225,6 +229,9 @@ class TestScheduleScoring(RealDataCase):
         self.assertEqual(len(report["top_schedules"]), 2)
         first, second = report["top_schedules"]
         self.assertGreaterEqual(first["projection"]["mean"], second["projection"]["mean"])
+        self.assertEqual(first["target_npi"], config["target_npi"])
+        self.assertEqual(first["target_gap"]["mean"], first["projection"]["mean"]-config["target_npi"])
+        self.assertTrue(0 <= first["target_hit_rate"] <= 1)
         self.assertEqual(first["projection"]["mean_standard_error"], 0.0)
         self.assertEqual(second["paired_gap_from_leader"]["mean"],
                          first["projection"]["mean"]-second["projection"]["mean"])
