@@ -86,7 +86,9 @@ value, not when the game was played. A loss can be excluded when keeping it
 would raise the rating. Winless teams use 85% of their lowest-rated opponent's
 NPI. A postseason game decided by penalty kicks is recorded as a tie for NPI
 while the kicks determine advancement; the national championship game is the
-exception.
+exception. The NCAA publishes the ten-win requirement; the exact component
+ordering was derived from official exports and regression-tested against the
+published division ratings.
 
 Because every opponent's rating also depends on its opponents, the division
 solver updates every team simultaneously until the largest change is below the

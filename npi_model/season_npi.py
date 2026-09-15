@@ -1,4 +1,4 @@
-"""Team-season NPI aggregation for 2024 Division III men's soccer."""
+"""Team-season NPI aggregation for Division III men's soccer."""
 
 from dataclasses import dataclass
 from math import fsum, isfinite
