@@ -1,11 +1,18 @@
 'use client';
 import { useState } from 'react';
-import { ArrowUpRight, ChartNoAxesCombined, Check, ChevronRight, CircleHelp, Database, Download, FileSpreadsheet, Printer, Trophy } from 'lucide-react';
+import { ChartNoAxesCombined, Check, CircleHelp, Database, Download, FileSpreadsheet, Pencil, Printer, TrendingDown, TrendingUp, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Scenarios } from '@/components/scenarios';
 import { coachReportHtml, comparisonCsv } from '@/lib/exports';
-import { fmt, Outcome, Report, Schedule, signed } from '@/lib/model';
+import { Config, fmt, Outcome, Report, Schedule, signed } from '@/lib/model';
+
+function joinAnd(items:string[]):string{
+  if(items.length<=1)return items.join('');
+  if(items.length===2)return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0,-1).join(', ')}, and ${items[items.length-1]}`;
+}
 
 export function Forecast({schedule,stale}:{schedule:Schedule|undefined;stale:boolean}) {
   const p=schedule?.projection;
@@ -13,13 +20,15 @@ export function Forecast({schedule,stale}:{schedule:Schedule|undefined;stale:boo
   return <section className="panel forecast"><div className="panel-heading"><div><span className="eyebrow">{stale?'PREVIOUS COMPARISON':'SELECTED SCHEDULE'}</span><h2>{schedule?`Option ${schedule.rank}`:'Run a comparison'}</h2></div><ChartNoAxesCombined size={22}/></div><div className="forecast-number">{fmt(p?.mean)}<span>average projected season NPI</span></div><div className="range-visual" role="img" aria-label={p?`Average ${fmt(p.mean)}; likely range ${fmt(p.p10)} to ${fmt(p.p90)}`:'No projection yet'}><div className="range-line"/><div className="range-dot" style={{left:`${position}%`}}/></div><div className="range-labels"><span>{fmt(p?.p10)}<small>Likely low</small></span><span>{fmt(p?.p90)}<small>Likely high</small></span></div><div className="forecast-stats"><div><span>Target season NPI</span><strong>{fmt(schedule?.target_npi)}</strong></div><div><span>Average distance to target</span><strong className={(schedule?.target_gap.mean??0)>=0?'positive':'negative'}>{signed(schedule?.target_gap.mean)}</strong></div><div><span>Modeled outcomes reaching target</span><strong>{schedule?fmt(schedule.target_hit_rate*100,0):'—'}%</strong></div><div><span>Gain over NESCAC-only schedule</span><strong className={(schedule?.impact_vs_fixed_slate.mean??0)>=0?'positive':'negative'}>{signed(schedule?.impact_vs_fixed_slate.mean)}</strong></div><div><span>Model run uncertainty</span><strong>± {fmt(p?.mean_standard_error)}</strong></div></div><div className="insight"><CircleHelp size={18}/><p><strong>How to read this</strong> A positive target gap clears the goal on average. The likely low-to-high range shows how much the season result could move.</p></div></section>;
 }
 
-export function Results({report,selected,onSelect,stale}:{report:Report;selected:number;onSelect:(n:number)=>void;stale:boolean}) {
+export function Results({report,selected,onSelect,stale,onEdit,onOpenScenario}:{
+  report:Report;selected:number;onSelect:(n:number)=>void;stale:boolean;onEdit:()=>void;onOpenScenario:(config:Config)=>void;
+}) {
   const [exportOpen,setExportOpen]=useState(false);
   const schedule=report.top_schedules[selected]||report.top_schedules[0];
+  const alternatives=report.top_schedules.filter(row=>row.rank!==schedule.rank);
   const scale=Math.max(.5,...schedule.opponent_impacts.flatMap(r=>[Math.abs(r.win.impact.mean),Math.abs(r.loss.impact.mean)]));
   const biggestReward=schedule.opponent_impacts.reduce((best,row)=>row.win.impact.mean>best.win.impact.mean?row:best,schedule.opponent_impacts[0]);
   const largestRisk=schedule.opponent_impacts.reduce((worst,row)=>row.loss.impact.mean<worst.loss.impact.mean?row:worst,schedule.opponent_impacts[0]);
-  const leader=report.top_schedules[0];
   const locked={win:0,tie:0,loss:0};
   report.config.fixed_games.forEach(game=>{if(game.result)locked[game.result]++;});
   const openGames=report.config.fixed_games.filter(game=>!game.result).length+schedule.opponents.length;
@@ -28,20 +37,62 @@ export function Results({report,selected,onSelect,stale}:{report:Report;selected
   const record=(row:{win:number;tie:number;loss:number})=>`${row.win}-${row.loss}-${row.tie}`;
   const winEquivalents=(row:{win:number;tie:number})=>row.win+row.tie/2;
   const floor=(row:{win:number;tie:number})=>{const value=winEquivalents(row);return value>=10?`${fmt(value,1)} win-equivalents · 10-game floor reached`:`${fmt(value,1)} win-equivalents · ${fmt(10-value,1)} short of the floor`;};
-  function label(row:Schedule,i:number){if(i===0)return 'Best average';if(row.target_hit_rate>leader.target_hit_rate)return 'Best chance at goal';if(row.projection.p10>leader.projection.p10)return 'Safer low end';if(row.projection.p90>leader.projection.p90)return 'Higher upside';return 'Close alternative';}
   function download(filename:string,contents:string,type:string){const url=URL.createObjectURL(new Blob([contents],{type}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function printReport(){const frame=document.createElement('iframe');frame.title='Printable schedule comparison';frame.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';document.body.append(frame);const printWindow=frame.contentWindow;if(!printWindow){frame.remove();return;}printWindow.document.open();printWindow.document.write(coachReportHtml(report,schedule));printWindow.document.close();setExportOpen(false);setTimeout(()=>{printWindow.focus();printWindow.print();printWindow.addEventListener('afterprint',()=>frame.remove(),{once:true});},250);setTimeout(()=>frame.remove(),60000);}
   const money=(value:number)=>new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0}).format(value);
   const day=(value:string|null)=>value?new Date(`${value}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Date open';
-  return <section className="results-section"><div className="results-heading"><div><p className="eyebrow">{stale?'PREVIOUS RESULTS · YOUR CHOICES HAVE CHANGED':'SCHEDULE RECOMMENDATIONS'}</p><h2>Best {report.config.open_slots}-game schedules for a {fmt(report.config.target_npi)} target</h2><p>We tested {report.screening.length} possible combinations. Click an option to see whether it reaches the goal and where its risk comes from.</p></div><Button variant="outline" onClick={()=>setExportOpen(true)}><Download size={15}/>Export results</Button></div>
+  const gapPositive=schedule.target_gap.mean>=0;
+  return <section className="results-screen"><div className="results-inner">
+    <div className="results-top">
+      <div><p className="eyebrow">{stale?'PREVIOUS RESULTS · YOUR CHOICES HAVE CHANGED':'RESULTS'}</p><h2>{report.config.season} · target NPI {fmt(report.config.target_npi)}</h2></div>
+      <div className="results-top-actions">
+        <Button variant="outline" onClick={onEdit}><Pencil size={15}/>Change my answers</Button>
+        <Scenarios config={report.config} onOpen={onOpenScenario} disabled={false}/>
+        <Button className="primary-action" onClick={()=>setExportOpen(true)}><Download size={15}/>Export results</Button>
+      </div>
+    </div>
     <Dialog open={exportOpen} onOpenChange={setExportOpen}><DialogContent className="export-dialog"><DialogHeader><DialogTitle>Share this comparison</DialogTitle><DialogDescription>Choose a coach-ready report, a spreadsheet for further analysis, or the complete model data.</DialogDescription></DialogHeader><div className="export-options"><button onClick={printReport}><span><Printer/></span><strong>Print or save as PDF</strong><small>A clean report with all rankings and full details for Option {schedule.rank}.</small></button><button onClick={()=>download('schedule-lab-comparison.csv',comparisonCsv(report),'text/csv;charset=utf-8')}><span><FileSpreadsheet/></span><strong>Download spreadsheet</strong><small>Every option, opponent, probability, NPI impact, date, venue, travel, and cost.</small></button><button onClick={()=>download('schedule-lab-full-data.json',JSON.stringify(report,null,2),'application/json')}><span><Database/></span><strong>Download full data</strong><small>The complete model output in JSON, with full internal precision.</small></button></div></DialogContent></Dialog>
-    <div className="schedule-cards">{report.top_schedules.map((row,i)=><button key={row.rank} className={`schedule-card ${selected===i?'selected':''}`} onClick={()=>onSelect(i)} aria-pressed={selected===i}><div className="schedule-card-top"><span className="schedule-order">{i===0?<Trophy size={14}/>:String(row.rank).padStart(2,'0')}{label(row,i)}</span>{selected===i?<Check size={16}/>:<ChevronRight size={16}/>}</div><div className="schedule-card-npi">{fmt(row.projection.mean)}<small>average NPI</small></div><p>{row.opponents.join(' · ')}</p><div className="schedule-card-logistics"><span>{row.logistics.total_travel_miles.toLocaleString()} travel miles</span><span>{money(row.logistics.total_cost)}</span><span>{row.logistics.preferred_count} preferred</span></div><div className={`schedule-goal ${row.target_gap.mean>=0?'goal-met':'goal-short'}`}><span>{row.target_gap.mean>=0?'Average clears target':'Average below target'}</span><strong>{signed(row.target_gap.mean)}</strong></div><div className="schedule-card-range"><span>Likely low – high</span><strong>{fmt(row.projection.p10)} – {fmt(row.projection.p90)}</strong></div></button>)}</div>
+
+    <section className="hero-card">
+      <div className="hero-kicker"><Trophy size={17}/><span>{report.top_schedules.length>1?`OPTION ${schedule.rank} OF ${report.top_schedules.length}`:'OUR RECOMMENDATION'}</span></div>
+      <div className="hero-grid">
+        <div>
+          <h1 className="hero-headline">Play {joinAnd(schedule.opponents)}{schedule.opponents.at(-1)?.endsWith('.')?'':'.'}</h1>
+          <ul className="hero-why">{schedule.reasoning.map((line,i)=><li key={i}>{line}</li>)}</ul>
+          <div className="hero-opponents">{schedule.opponent_impacts.map(r=><span className="hero-opponent-chip" key={r.team}>{r.team}<span style={{color:'#7f8796',fontSize:12}}>{fmt(r.probabilities.win*100,0)}% win</span></span>)}</div>
+        </div>
+        <div className="hero-number-card">
+          <span>PROJECTED SEASON NPI</span>
+          <div className="hero-number">{fmt(schedule.projection.mean)}</div>
+          <div className="hero-gap-pill" style={{color:gapPositive?'#68c6a3':'#ee8494',background:gapPositive?'#10231c':'#251519'}}>{gapPositive?<TrendingUp size={13}/>:<TrendingDown size={13}/>}{signed(schedule.target_gap.mean)} vs target</div>
+          <div className="hero-number-stats">
+            <div><span>Likely range</span><strong>{fmt(schedule.projection.p10)} – {fmt(schedule.projection.p90)}</strong></div>
+            <div><span>Seasons reaching target</span><strong>{fmt(schedule.target_hit_rate*100,0)}%</strong></div>
+            <div><span>Gain vs. NESCAC alone</span><strong className={schedule.impact_vs_fixed_slate.mean>=0?'positive':'negative'}>{signed(schedule.impact_vs_fixed_slate.mean)}</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div className="panel season-cases"><div className="panel-heading"><div><h2>How the season could finish</h2><p>Option {schedule.rank} · compare the projected result with all-win and all-loss boundaries</p></div></div><div className="case-grid"><article className="case-card worst"><span>WORST ON-FIELD CASE</span><strong>{fmt(schedule.stress_all_unlocked_losses)} <small>NPI</small></strong><p>All {openGames} open games are losses.</p><div><b>{record(worstRecord)}</b><small>{floor(worstRecord)}</small></div></article><article className="case-card expected"><span>PROJECTED AVERAGE</span><strong>{fmt(schedule.projection.mean)} <small>NPI</small></strong><p>Outcome chances are applied game by game.</p><div><b>{record(locked)} + {openGames} open</b><small>Likely NPI {fmt(schedule.projection.p10)}–{fmt(schedule.projection.p90)}</small></div></article><article className="case-card best"><span>BEST ON-FIELD CASE</span><strong>{fmt(schedule.stress_all_unlocked_wins)} <small>NPI</small></strong><p>All {openGames} open games are wins.</p><div><b>{record(bestRecord)}</b><small>{floor(bestRecord)}</small></div></article></div><div className="case-note"><CircleHelp size={17}/><p>A tie adds half a win toward the ten-win floor. These are clear all-loss and all-win planning boundaries; because weak results can be excluded, they are not guaranteed to be the mathematical lowest and highest NPI combinations.</p></div></div>
     <div className="panel logistics-panel"><div className="panel-heading"><div><h2>Practical schedule for Option {schedule.rank}</h2><p>{schedule.logistics.total_travel_miles.toLocaleString()} total travel miles · {money(schedule.logistics.total_cost)} estimated cost · {schedule.logistics.preferred_count} preferred opponent{schedule.logistics.preferred_count===1?'':'s'}</p></div></div><Table><TableHeader><TableRow><TableHead>Opponent</TableHead><TableHead>Status</TableHead><TableHead>Venue</TableHead><TableHead>Scheduled date</TableHead><TableHead>Travel</TableHead><TableHead>Cost</TableHead></TableRow></TableHeader><TableBody>{schedule.logistics.games.map(game=><TableRow key={game.team}><TableCell>{game.team}</TableCell><TableCell><span className={`status-pill ${game.priority}`}>{game.priority}</span></TableCell><TableCell>{game.venue==='either'?'Either':game.venue[0].toUpperCase()+game.venue.slice(1)}</TableCell><TableCell>{day(game.date)}</TableCell><TableCell>{game.travel_miles.toLocaleString()} mi</TableCell><TableCell>{money(game.estimated_cost)}</TableCell></TableRow>)}</TableBody></Table></div>
     <div className="panel tradeoff-panel"><div className="panel-heading"><div><h2>Win reward versus loss risk</h2><p>Option {schedule.rank} · each number shows the season NPI change caused by that one game</p></div><span className="chart-legend"><i className="legend-win"/>Amherst wins<i className="legend-loss"/>Amherst loses</span></div>
       <div className="tradeoff-chart"><div className="tradeoff-axis"><span>Opponent</span><div><span>Downside</span><span>NPI impact</span><span>Upside</span></div></div>{schedule.opponent_impacts.map(r=><div className="tradeoff-row" key={r.team}><strong>{r.team}</strong><div className="impact-track"><div className="zero-line"/>{(['win','loss'] as Outcome[]).map(o=>{const v=r[o].impact.mean;const w=Math.abs(v)/scale*44;return <div key={o} className={`impact-bar ${o}`} style={{left:`${v>=0?50:50-w}%`,width:`${Math.max(w,.4)}%`}} role="img" aria-label={`${r.team} ${o}: ${signed(v)} NPI`} title={`${o}: ${signed(v)}`}/>;})}</div><div className="impact-values"><span className="positive">{signed(r.win.impact.mean)}</span><span className="negative">{signed(r.loss.impact.mean)}</span></div></div>)}</div>
       <Table className="risk-table"><TableHeader><TableRow><TableHead>Opponent</TableHead><TableHead>Estimated chances (W / T / L)</TableHead><TableHead>If Amherst wins</TableHead><TableHead>If Amherst ties</TableHead><TableHead>If Amherst loses</TableHead></TableRow></TableHeader><TableBody>{schedule.opponent_impacts.map(r=><TableRow key={r.team}><TableCell>{r.team}</TableCell><TableCell>{(['win','tie','loss'] as Outcome[]).map(o=>`${fmt(r.probabilities[o]*100,0)}%`).join(' / ')}</TableCell><TableCell className="positive">{signed(r.win.impact.mean)}</TableCell><TableCell>{signed(r.tie.impact.mean)}</TableCell><TableCell className="negative">{signed(r.loss.impact.mean)}</TableCell></TableRow>)}</TableBody></Table>
       <div className="insight result-insight"><CircleHelp size={18}/><p><strong>{biggestReward.team} offers the largest win reward; {largestRisk.team} carries the largest loss risk.</strong>{schedule.rank>1&&schedule.paired_gap_from_leader.mean_ci95[0]<=0?' This option is close enough to the leader that the model cannot confidently separate them. ':schedule.rank>1?` Its average trails Option 1 by ${fmt(schedule.paired_gap_from_leader.mean)}. `:' '}The five game effects overlap, so do not add the individual numbers together.</p></div>
-    </div><div className="results-bottom"><span><Check size={14}/>{report.division_solves.toLocaleString()} full-division checks completed</span><span>{report.calculation?.opponent_impacts==='fixed-rating quick estimate'?'Final schedules use the full division · game breakdown is a quick estimate':`Every result uses the full division · ${report.source.cutoff}`}</span></div>
-  </section>;
+    </div>
+
+    {alternatives.length>0&&<>
+      <h2>{schedule.rank===1?'If that schedule falls through':'Compare with the top pick'}</h2>
+      <p>{schedule.rank===1?'These options are close enough that the model cannot confidently separate them from the recommendation. Either is a fine substitute.':'Switch back to the top-ranked option, or look at the other alternative.'}</p>
+      <div className="alt-grid">{alternatives.map(row=><button type="button" className="alt-card" key={row.rank} onClick={()=>onSelect(report.top_schedules.indexOf(row))}>
+        <div className="alt-card-top"><span>OPTION {row.rank}</span><span className="alt-gap-pill">{signed(row.paired_gap_from_leader.mean)} vs. leader</span></div>
+        <div className="alt-npi">{fmt(row.projection.mean)}</div>
+        <p className="alt-teams">{row.opponents.join(' · ')}</p>
+        <div className="alt-range"><span>Likely range</span><strong>{fmt(row.projection.p10)} – {fmt(row.projection.p90)}</strong></div>
+      </button>)}</div>
+    </>}
+
+    <div className="results-bottom"><span><Check size={14}/>{report.division_solves.toLocaleString()} full-division checks completed</span><span>{report.calculation?.opponent_impacts==='fixed-rating quick estimate'?'Final schedules use the full division · game breakdown is a quick estimate':`Every result uses the full division · ${report.source.cutoff}`}</span></div>
+  </div></section>;
 }
