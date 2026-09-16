@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from .game_value import calculate_game_value
+from . import nescac_sync
 from .outcome_model import OutcomeModel
 from .planning import candidate_schedules, default_config, parse_plan
 from .schedule_optimizer import rank_schedules
@@ -342,6 +343,9 @@ class AppState:
                 job["finished"] = time.time()
                 self.active_jobs.discard(job_id)
 
+    def nescac_results(self):
+        return nescac_sync.sync_summary()
+
     def job(self, job_id, *, cancel=False, owner=None):
         with self.lock:
             if job_id not in self.jobs or self.jobs[job_id].get("owner") != owner:
@@ -398,6 +402,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply({"error": str(error)}, 400)
         if path == "/api/health":
             return self.reply({"status": "ok", "app": "ncaa-schedule-lab", "teams": len(self.state.ratings)})
+        if path == "/api/nescac-results":
+            return self.reply(self.state.nescac_results())
         if path.startswith("/api/jobs/"):
             try:
                 return self.reply(self.state.job(path.rsplit("/", 1)[-1]))

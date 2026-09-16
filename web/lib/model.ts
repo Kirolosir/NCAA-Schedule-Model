@@ -41,6 +41,8 @@ export type Bootstrap = {config: Config; teams: Team[]; source: SeasonSource; se
   model: {slope: number; tie_log_weight: number; fit_log_loss: number; sample_count: number;method:string;training_seasons:string[];holdout_season:string|null;out_of_time_log_loss:number|null}};
 export type Validation = {candidate_count: number; combinations: number; unfiltered_combinations:number; bands: Band[]; candidates: Candidate[]};
 export type Job = {id: string; status: string; message: string; progress: number; report?: Report; config: Config};
+export type NescacResult = {team: string; result: Outcome; date: string | null; score: string | null};
+export type NescacSync = {results: NescacResult[]; source: string | null; error: string | null};
 export type Explore = {opponent_npi: number; baseline_npi: number; probabilities: Probabilities;
   outcomes: Record<Outcome, {npi: number; impact: number; game_value?: {total: number; quality_win_bonus: number}}>;
   curve: {npi: number; outcomes: Record<Outcome, {impact: number}>}[]};

@@ -76,6 +76,10 @@ def create_app(*, state=None, public_origin=None):
         data.update(report=None, deployment={"hosted": True, "max_job_minutes": 20})
         return jsonify(data)
 
+    @app.get("/api/nescac-results")
+    def nescac_results():
+        return jsonify(model.nescac_results())
+
     @app.get("/api/jobs/<job_id>")
     def job_status(job_id):
         try:

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, DollarSign, LockKeyhole, MapPin, Pencil, Pin, Plus, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, DollarSign, LockKeyhole, MapPin, Pencil, Pin, Plus, RefreshCw, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { api, Bootstrap, Candidate, Config, Explore, fmt, Matchup, Outcome, Priority, Probabilities, Validation, Venue } from '@/lib/model';
+import { api, Bootstrap, Candidate, Config, Explore, fmt, Matchup, NescacSync, Outcome, Priority, Probabilities, Validation, Venue } from '@/lib/model';
 
 const PRESETS: Record<'favorite'|'toss_up'|'underdog', Probabilities> = {
   favorite: {win:.65,tie:.20,loss:.15},
@@ -126,10 +126,29 @@ export function SeasonRecord({config,data,onChange,disabled,expanded=false}: {co
   const completed=config.fixed_games.filter(game=>game.completed);
   const counts=(['win','tie','loss'] as Outcome[]).map(outcome=>completed.filter(game=>game.result===outcome).length);
   const available=data.teams.map(team=>team.name).filter(team=>team!==config.target_team&&!completed.some(game=>game.team===team)).sort();
+  const [sync,setSync]=useState<NescacSync|null>(null);
+  const [syncing,setSyncing]=useState(false);
+  const [dismissed,setDismissed]=useState<Set<string>>(new Set());
+  async function checkForResults(){
+    setSyncing(true);
+    try{setSync(await api<NescacSync>('nescac-results'));}
+    catch(error){setSync({results:[],source:null,error:(error as Error).message});}
+    finally{setSyncing(false);}
+  }
+  const pending=(sync?.results??[]).filter(item=>{
+    const game=config.fixed_games.find(g=>g.team===item.team);
+    return game&&!game.completed&&!dismissed.has(item.team);
+  });
   function add(team:string){const existing=config.fixed_games.find(game=>game.team===team);const fixed=existing?config.fixed_games.map(game=>{if(game.team!==team)return game;const {probabilities:_p,decision:_d,...rest}=game;return {...rest,result:'win' as Outcome,completed:true};}):[...config.fixed_games,{team,category:'nonconference',result:'win' as Outcome,completed:true}];onChange({...config,fixed_games:fixed,candidates:config.candidates.filter(candidate=>candidate.team!==team),required:config.required.filter(name=>name!==team),preferred:config.preferred.filter(name=>name!==team),excluded:config.excluded.filter(name=>name!==team)});}
   function setOutcome(team:string,value:string){onChange({...config,fixed_games:config.fixed_games.map(game=>{if(game.team!==team)return game;const {probabilities:_p,decision:_d,...rest}=game;if(value==='pk_advance')return {...rest,result:'tie',decision:'advanced_on_penalties',completed:true};if(value==='pk_elimination')return {...rest,result:'tie',decision:'eliminated_on_penalties',completed:true};return {...rest,result:value as Outcome,completed:true};})});}
   function remove(team:string){const game=config.fixed_games.find(row=>row.team===team)!;if(game.category==='conference'){onChange({...config,fixed_games:config.fixed_games.map(row=>{if(row.team!==team)return row;const {completed:_c,...rest}=row;return rest;})});}else onChange({...config,fixed_games:config.fixed_games.filter(row=>row.team!==team)});}
-  return <details open={expanded||undefined} className="panel conference-panel season-record-panel"><summary><span><CalendarDays size={17}/><strong>Current season results</strong><span className="count-pill">{counts[0]} W · {counts[1]} T · {counts[2]} L</span></span><ChevronDown size={17}/></summary><div className="conference-list"><p>Add each completed game by opponent. This is the only accurate way to build a current record because every opponent has a different NPI.</p><div className="add-result"><Plus size={16}/><Combobox items={available} value={null} onValueChange={team=>team&&add(String(team))} disabled={disabled}><ComboboxInput aria-label="Add a completed opponent" placeholder="Add a completed opponent…"/><ComboboxContent><ComboboxEmpty>No team found.</ComboboxEmpty><ComboboxList>{(team:string)=><ComboboxItem key={team} value={team}>{team}</ComboboxItem>}</ComboboxList></ComboboxContent></Combobox></div>{completed.map(game=>{const value=game.decision==='advanced_on_penalties'?'pk_advance':game.decision==='eliminated_on_penalties'?'pk_elimination':game.result!;return <div className="conference-row result-row" key={game.team}><div><span>{game.team}</span><small>{game.category==='conference'?'NESCAC':'Nonconference'}</small></div><Choice label={`${game.team} completed result`} value={value} disabled={disabled} options={[{value:'win',label:'Win'},{value:'tie',label:'Tie'},{value:'pk_advance',label:'Tie · advanced on penalties'},{value:'pk_elimination',label:'Tie · eliminated on penalties'},{value:'loss',label:'Loss'}]} onChange={next=>setOutcome(game.team,next)}/><Button variant="ghost" size="icon" disabled={disabled} aria-label={`Remove completed result for ${game.team}`} onClick={()=>remove(game.team)}><X size={15}/></Button></div>;})}{!completed.length&&<div className="empty-state compact-empty">No completed games entered yet.</div>}<div className="record-summary"><span>Current record</span><strong>{counts[0]}-{counts[2]}-{counts[1]}</strong><small>{fmt(counts[0]+counts[1]/2,1)} win-equivalents</small></div></div></details>;
+  return <details open={expanded||undefined} className="panel conference-panel season-record-panel"><summary><span><CalendarDays size={17}/><strong>Current season results</strong><span className="count-pill">{counts[0]} W · {counts[1]} T · {counts[2]} L</span></span><ChevronDown size={17}/></summary><div className="conference-list"><p>Add each completed game by opponent. This is the only accurate way to build a current record because every opponent has a different NPI.</p>
+    <div className="sync-panel"><div className="sync-panel-head"><span><RefreshCw size={14}/>Amherst Athletics</span><Button variant="outline" size="sm" disabled={disabled||syncing} onClick={checkForResults}>{syncing?'Checking…':'Check for new NESCAC results'}</Button></div>
+      {sync?.error&&<p className="field-note warning-text">{sync.error}</p>}
+      {sync&&!sync.error&&!pending.length&&<p className="field-note">No new completed conference games found.</p>}
+      {pending.map(item=><div className="sync-row" key={item.team}><span><strong>{item.team}</strong>{item.date&&<small>{item.date}</small>}</span><span className={`status-pill ${item.result}`}>{item.result}{item.score?` · ${item.score}`:''}</span><Button size="sm" disabled={disabled} onClick={()=>{setOutcome(item.team,item.result);setDismissed(prev=>new Set(prev).add(item.team));}}>Confirm</Button><Button variant="ghost" size="sm" disabled={disabled} onClick={()=>setDismissed(prev=>new Set(prev).add(item.team))}>Dismiss</Button></div>)}
+    </div>
+    <div className="add-result"><Plus size={16}/><Combobox items={available} value={null} onValueChange={team=>team&&add(String(team))} disabled={disabled}><ComboboxInput aria-label="Add a completed opponent" placeholder="Add a completed opponent…"/><ComboboxContent><ComboboxEmpty>No team found.</ComboboxEmpty><ComboboxList>{(team:string)=><ComboboxItem key={team} value={team}>{team}</ComboboxItem>}</ComboboxList></ComboboxContent></Combobox></div>{completed.map(game=>{const value=game.decision==='advanced_on_penalties'?'pk_advance':game.decision==='eliminated_on_penalties'?'pk_elimination':game.result!;return <div className="conference-row result-row" key={game.team}><div><span>{game.team}</span><small>{game.category==='conference'?'NESCAC':'Nonconference'}</small></div><Choice label={`${game.team} completed result`} value={value} disabled={disabled} options={[{value:'win',label:'Win'},{value:'tie',label:'Tie'},{value:'pk_advance',label:'Tie · advanced on penalties'},{value:'pk_elimination',label:'Tie · eliminated on penalties'},{value:'loss',label:'Loss'}]} onChange={next=>setOutcome(game.team,next)}/><Button variant="ghost" size="icon" disabled={disabled} aria-label={`Remove completed result for ${game.team}`} onClick={()=>remove(game.team)}><X size={15}/></Button></div>;})}{!completed.length&&<div className="empty-state compact-empty">No completed games entered yet.</div>}<div className="record-summary"><span>Current record</span><strong>{counts[0]}-{counts[2]}-{counts[1]}</strong><small>{fmt(counts[0]+counts[1]/2,1)} win-equivalents</small></div></div></details>;
 }
 
 export function Conference({config,data,onChange,disabled,expanded=false}: {config:Config;data:Bootstrap;onChange:(c:Config)=>void;disabled:boolean;expanded?:boolean}) {
