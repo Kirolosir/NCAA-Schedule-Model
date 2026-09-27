@@ -226,6 +226,36 @@ class TestScheduleScoring(RealDataCase):
         e.sample(("Babson",), samples=2, seed=987, forced={"Babson": historical_result})
         self.assertEqual(e.solves, 1)
 
+    def test_six_game_scenario_matches_reference_without_changing_inputs(self):
+        config = default_config('2024')
+        for game in config['fixed_games']:
+            game['result'] = 'win'
+        config['candidates'] = config['candidates'][:6]
+        for i, candidate in enumerate(config['candidates']):
+            candidate['matchup'] = 'custom'
+            candidate['probabilities'] = {
+                'win': 1 if i < 5 else 0, 'tie': 0, 'loss': 0 if i < 5 else 1}
+        config['open_slots'] = 6
+        original_config = json.dumps(config, sort_keys=True)
+        original_games, original_ratings = list(self.games), dict(self.ratings)
+        target, fixed, candidates, _ = parse_plan(config, self.ratings)
+        evaluator = ScheduleEvaluator(self.games, self.ratings, target, fixed,
+                                      candidates, self.model)
+        names = tuple(c.team for c in candidates)
+        outcomes = [(g.team, g.result) for g in fixed] + [
+            (c.team, 'win' if c.probabilities.win == 1 else 'loss') for c in candidates]
+        graph = [g for g in self.games if target not in (g.team_a, g.team_b)]
+        graph += [DivisionGame(target, team, outcome) for team, outcome in outcomes]
+        expected = iterate_division_npi(graph, eligible_teams=self.ratings,
+                                       initial_ratings=self.ratings).ratings[target]
+        for seed in (1, 987):
+            values = evaluator.sample(names, samples=2, seed=seed)
+            for value in values:
+                self.assertAlmostEqual(value, expected, places=6)
+        self.assertEqual(self.games, original_games)
+        self.assertEqual(self.ratings, original_ratings)
+        self.assertEqual(json.dumps(config, sort_keys=True), original_config)
+
     def test_conditional_impacts_equal_reference_full_division(self):
         e = self.evaluator()
         row = risk_reward(e, ("Babson",), samples=2, seed=42)[0]
