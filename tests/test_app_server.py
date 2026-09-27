@@ -25,6 +25,23 @@ class TestAppValidation(unittest.TestCase):
         self.assertEqual(summary['candidate_count'], 2)
         self.assertEqual(summary['bands'][0]['member_count'], 25)
 
+    def test_larger_required_schedules_with_a_playoff_loss(self):
+        for size in (6, 13):
+            with self.subTest(size=size):
+                config = default_config()
+                fixed = {game['team'] for game in config['fixed_games']}
+                names = [name for name in self.ratings
+                         if name != config['target_team'] and name not in fixed][:size]
+                config.update(open_slots=size, required=names, candidates=[
+                    {'team': name, 'probabilities': {
+                        'win': 0 if i == size-1 else 1,
+                        'tie': 0, 'loss': 1 if i == size-1 else 0}}
+                    for i, name in enumerate(names)])
+                parsed, summary = validate_config(config, self.ratings)
+                self.assertEqual(summary['combinations'], 1)
+                self.assertEqual(summary['candidate_count'], size)
+                self.assertEqual(parsed['candidates'][-1]['probabilities']['loss'], 1)
+
     def test_rejects_strings_booleans_and_nonfinite_numbers(self):
         for key, value in [('samples', True), ('samples', '8'), ('open_slots', 1.5),
                            ('seed', float('nan')), ('probability_slope_scale', float('inf')),

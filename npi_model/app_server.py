@@ -118,7 +118,7 @@ def validate_config(raw, ratings):
         for key in ("lower", "upper"):
             if band.get(key) is not None:
                 number(band[key], f"Band {key}", 0, 10000)
-    for key, low, high in (("open_slots", 1, 12), ("samples", 2, 64),
+    for key, low, high in (("open_slots", 1, len(ratings)), ("samples", 2, 64),
                            ("validation_samples", 2, 256), ("insight_samples", 2, 32),
                            ("top_n", 1, 5), ("max_combinations", 1, 500),
                            ("representatives_per_band", 1, 8), ("seed", 0, 2**53-1)):
