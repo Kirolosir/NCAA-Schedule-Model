@@ -42,6 +42,29 @@ class TestAppValidation(unittest.TestCase):
                 self.assertEqual(summary['candidate_count'], size)
                 self.assertEqual(parsed['candidates'][-1]['probabilities']['loss'], 1)
 
+    def test_playoff_validation_and_old_saved_plans(self):
+        old = default_config()
+        for key in ('playoff_games', 'historical_cutoff_npi', 'results_updated'):
+            old.pop(key)
+        parsed, _ = validate_config(old, self.ratings)
+        self.assertEqual(parsed['playoff_games'], [])
+        playoff = {'game_id': 'playoff:quarterfinal', 'team': 'Tufts',
+                   'round': 'Quarterfinal', 'result': 'loss'}
+        config, summary = validate_config({'playoff_games': [playoff]}, self.ratings)
+        self.assertEqual(summary['fixed_count'], 11)
+        self.assertEqual(summary['combinations'], 21)
+        for patch in ({'game_id': 'Tufts'}, {'round': 'Unknown'}, {'team': 'Amherst'},
+                      {'result': 'loss', 'probabilities': {'win': 0, 'tie': 0, 'loss': 1}},
+                      {'result': 'loss', 'decision': 'eliminated_on_penalties'}):
+            with self.subTest(patch=patch), self.assertRaises(ValueError):
+                validate_config({'playoff_games': [{**playoff, **patch}]}, self.ratings)
+        with self.assertRaisesRegex(ValueError, 'duplicate playoff'):
+            validate_config({'playoff_games': [playoff, playoff]}, self.ratings)
+        with self.assertRaises(ValueError):
+            validate_config({'playoff_games': None}, self.ratings)
+        with self.assertRaises(ValueError):
+            validate_config({'historical_cutoff_npi': float('nan')}, self.ratings)
+
     def test_rejects_strings_booleans_and_nonfinite_numbers(self):
         for key, value in [('samples', True), ('samples', '8'), ('open_slots', 1.5),
                            ('seed', float('nan')), ('probability_slope_scale', float('inf')),

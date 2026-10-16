@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from npi_model.fast_division import CompiledDivision
 from npi_model.seasons import load_season
-from npi_model.temporal_model import fit_historical, historical_model, transition_rows
+from npi_model.temporal_model import fit_historical, historical_model, transition_rows, historical_accuracy, score_predictions
 
 
 class TestSeasonData(unittest.TestCase):
@@ -37,6 +37,32 @@ class TestSeasonData(unittest.TestCase):
 
 
 class TestTemporalModel(unittest.TestCase):
+    def test_accuracy_measures_and_calibration_use_held_out_games(self):
+        report = historical_accuracy('2025')
+        model, diagnostics = historical_model('2025')
+        self.assertTrue(report['available'])
+        self.assertEqual(report['training_seasons'], ['2023', '2024'])
+        self.assertEqual(report['predictor_season'], '2024')
+        self.assertEqual(report['holdout_season'], '2025')
+        self.assertEqual(report['model']['games'], 3528)
+        self.assertEqual(report['model']['log_loss'], diagnostics['holdout_log_loss'])
+        self.assertEqual(report['baseline']['log_loss'], diagnostics['constant_holdout_log_loss'])
+        self.assertEqual(sum(row['count'] for row in report['model']['win_calibration']), 2*3528)
+        self.assertGreater(report['log_loss_improvement'], 0)
+        self.assertFalse(historical_accuracy('2023')['available'])
+
+    def test_probability_scoring_has_expected_values_for_uniform_predictions(self):
+        report = score_predictions([(0, 0, 1), (0, 1, 1), (0, 2, 1)], 0, 0)
+        from math import log
+        self.assertAlmostEqual(report['log_loss'], log(3))
+        self.assertAlmostEqual(report['brier_score'], 2/3)
+        self.assertAlmostEqual(report['accuracy'], 1/3)
+        occupied = [row for row in report['win_calibration'] if row['count']]
+        self.assertEqual(len(occupied), 1)
+        self.assertEqual(occupied[0]['count'], 6)
+        self.assertAlmostEqual(occupied[0]['actual_win_rate'], 1/3)
+        self.assertAlmostEqual(occupied[0]['predicted_win_rate'], 1/3)
+
     def test_prior_season_rows_and_holdout_are_out_of_time(self):
         rows, source = transition_rows("2025")
         self.assertEqual(len(rows), 3528)

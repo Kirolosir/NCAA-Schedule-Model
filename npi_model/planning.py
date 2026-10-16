@@ -40,6 +40,13 @@ class FixedGame:
     probabilities: OutcomeProbabilities | None = None
     decision: str | None = None
     completed: bool = False
+    game_id: str | None = None
+    round: str | None = None
+
+    @property
+    def key(self):
+        # Ordinary games keep their old random streams and saved-plan behavior.
+        return self.game_id or self.team
 
 
 def load_graph(path=DEFAULT_GRAPH):
@@ -86,6 +93,9 @@ def default_config(season=DEFAULT_SEASON):
         "mode": "teams", "band_scale": "rating",
         "fixed_games": [{"team": team, "category": "conference", "result": results[team]}
                         for team in CONFERENCE],
+        "playoff_games": [],
+        "historical_cutoff_npi": 56.54,
+        "results_updated": None,
         "candidates": [{"team": team} for team in DEFAULT_POOL],
         "bands": [{"label": label, "lower": low, "upper": high}
                   for label, low, high in DEFAULT_BANDS],
@@ -173,16 +183,22 @@ def parse_plan(config, ratings):
     strength = config.get("target_recent_npi", strengths[target])
     if not isfinite(strength) or not 0 <= strength <= 100:
         raise ValueError("target_recent_npi must be finite and in 0–100")
-    fixed = tuple(FixedGame(row["team"], row.get("category", "conference"),
+    regular = tuple(FixedGame(row["team"], row.get("category", "conference"),
                             row.get("result"), probability_override(row.get("probabilities")),
                             row.get("decision"), row.get("completed", False))
                   for row in config["fixed_games"])
+    playoffs = tuple(FixedGame(row["team"], "playoff", row.get("result"),
+                              probability_override(row.get("probabilities")),
+                              row.get("decision"), row.get("completed", False),
+                              row.get("game_id"), row.get("round", "Playoff"))
+                     for row in config.get("playoff_games", []))
+    fixed = regular + playoffs
     if not fixed:
         raise ValueError("fixed_games must include at least one baseline game")
     for game in fixed:
         if game.team not in ratings or game.team == target:
             raise ValueError(f"invalid fixed opponent: {game.team}")
-        if game.category not in ("conference", "nonconference"):
+        if game.category not in ("conference", "nonconference", "playoff"):
             raise ValueError("invalid fixed-game category")
         if game.result not in (None, "win", "tie", "loss"):
             raise ValueError("invalid locked game result")
@@ -196,11 +212,22 @@ def parse_plan(config, ratings):
             raise ValueError("completed must be true or false")
         if game.completed and game.result is None:
             raise ValueError("a completed game needs a result")
-    if len({g.team for g in fixed}) != len(fixed):
-        raise ValueError("duplicate fixed opponents are unsupported; use unique opponents")
+    if len({g.team for g in regular}) != len(regular):
+        raise ValueError("duplicate regular-season opponents; add a separate playoff game for a rematch")
+    if any(g.category not in ("conference", "nonconference") for g in regular):
+        raise ValueError("Playoff games must use the separate playoff_games list")
+    for game in playoffs:
+        if (not isinstance(game.game_id, str) or not game.game_id.startswith("playoff:")
+                or not 9 <= len(game.game_id) <= 80):
+            raise ValueError("Each playoff game needs a unique playoff: game_id")
+        if game.round not in ("Quarterfinal", "Semifinal", "Final", "Playoff"):
+            raise ValueError("Choose a valid playoff round")
+    if len({g.key for g in fixed}) != len(fixed):
+        raise ValueError("duplicate playoff game_id")
     if not set(config.get("excluded", [])) <= set(ratings):
         raise ValueError("excluded contains an unknown team")
-    excluded = set(config.get("excluded", [])) | {target} | {g.team for g in fixed}
+    # A playoff rematch may also be an opponent in the regular-season pool.
+    excluded = set(config.get("excluded", [])) | {target} | {g.team for g in regular}
     band_rows = []
     for band in config.get("bands", []):
         members = band_members(ratings, band.get("lower"), band.get("upper"),

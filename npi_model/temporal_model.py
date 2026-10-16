@@ -7,7 +7,7 @@ import json
 from math import fsum, log
 from datetime import datetime
 
-from .outcome_model import OutcomeModel, _fit, _loss
+from .outcome_model import OutcomeModel, _fit, _loss, _probabilities
 from .seasons import DATA, load_season, season_path
 
 ARTIFACT = DATA / "historical_probability_models.json"
@@ -63,6 +63,57 @@ def historical_model(season):
         if sha256(season_path(year).read_bytes()).hexdigest() != digest:
             raise ValueError("Season data changed; rebuild historical probability models")
     return OutcomeModel(**entry["model"]), entry["diagnostics"]
+
+
+def score_predictions(rows, slope, tie):
+    """Score untouched games; include both teams for win-chance calibration.
+
+    The Brier score sums the three squared probability errors (0 is perfect).
+    Accuracy splits credit evenly if two outcomes tie for most likely.
+    """
+    predictions = [(_probabilities(d, slope, tie), outcome) for d, outcome, *_ in rows]
+    count = len(predictions)
+    if not count:
+        raise ValueError("Accuracy checks need at least one held-out game")
+    brier = fsum(fsum((p-int(i == outcome))**2 for i, p in enumerate(probs))
+                 for probs, outcome in predictions)/count
+    accuracy = fsum((1/sum(p == max(probs) for p in probs)) if probs[outcome] == max(probs) else 0
+                    for probs, outcome in predictions)/count
+    forecasts = [(p[0], int(y == 0)) for p, y in predictions]
+    forecasts += [(p[2], int(y == 2)) for p, y in predictions]
+    calibration = []
+    for index in range(5):
+        low, high = index/5, (index+1)/5
+        bucket = [(p, y) for p, y in forecasts if low <= p and (p < high or index == 4 and p == 1)]
+        calibration.append({"lower": low, "upper": high, "count": len(bucket),
+                            "predicted_win_rate": fsum(p for p, _ in bucket)/len(bucket) if bucket else None,
+                            "actual_win_rate": fsum(y for _, y in bucket)/len(bucket) if bucket else None})
+    return {"games": count, "log_loss": _loss(rows, slope, tie),
+            "brier_score": brier, "accuracy": accuracy, "win_calibration": calibration}
+
+
+@lru_cache(maxsize=4)
+def historical_accuracy(season):
+    if season not in ("2024", "2025"):
+        return {"available": False, "reason": "No earlier-season training and separate test season are available for this view."}
+    model, diagnostics = historical_model(season)
+    test, source = transition_rows(season)
+    # Baseline probabilities also use training outcomes only, never test outcomes.
+    train = []
+    for year in model.training_seasons:
+        train.extend(transition_rows(year, .75 ** (int(season)-1-int(year)))[0])
+    tie_rate = fsum(w for _, y, w in train if y == 1)/fsum(w for _, _, w in train)
+    baseline_tie = log(2*tie_rate/(1-tie_rate))
+    measured = score_predictions(test, model.slope, model.tie_log_weight)
+    baseline = score_predictions(test, 0, baseline_tie)
+    return {"available": True, "training_seasons": list(model.training_seasons),
+            "holdout_season": season, "predictor_season": source["predictor_season"],
+            "predictor_cutoff": source["predictor_cutoff"],
+            "excluded_games": source["excluded_new_teams_games"],
+            "model": measured, "baseline": baseline,
+            "log_loss_improvement": baseline["log_loss"]-measured["log_loss"],
+            "scope": "Tests the unadjusted probability model with prior-season ratings. Manual assumptions, strength overrides, and the planning blend are not validated by this check. Each game contributes two team perspectives to calibration; those perspectives are not independent games.",
+            "note": diagnostics["note"]}
 
 
 def planning_model(games, ratings, config):

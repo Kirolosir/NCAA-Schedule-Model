@@ -253,3 +253,15 @@ h1,h2,.hero-number,.welcome-hero h1,.step-header-label>strong,.brand-head strong
 .wizard-review-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(270px,.65fr);gap:18px}.wizard-summary{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;border:1px solid #292e38;border-radius:10px;background:#0d1015;overflow:hidden}.wizard-summary>div{padding:14px 16px;border-right:1px solid #292e38}.wizard-summary>div:last-child{border-right:0}.wizard-summary span,.wizard-summary strong{display:block}.wizard-summary span{color:#818a9a;font-size:10px;letter-spacing:.45px;text-transform:uppercase}.wizard-summary strong{margin-top:5px;color:#d9dde5;font-size:14px;text-transform:capitalize}.wizard-main-inner>.notice{margin:0 0 20px}.wizard-main-inner>.stale-note{margin:14px 0 0}
 @media(max-width:1000px){.wizard-review-grid{grid-template-columns:1fr}.wizard-summary{grid-template-columns:repeat(2,1fr)}.wizard-summary>div:nth-child(2){border-right:0}.wizard-summary>div:nth-child(-n+2){border-bottom:1px solid #292e38}}
 @media(max-width:767px){.wizard-summary{grid-template-columns:1fr 1fr}.wizard-summary>div{padding:12px}.wizard-review-grid{gap:14px}}
+.data-freshness{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 28px;border-bottom:1px solid #2c3039;color:#9ca5b5;font-size:12px;background:#0d1016}
+.data-freshness strong{color:#d6dfeb;font-weight:500}
+.assume-outcome{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0 8px}
+.assume-outcome button{padding:8px 12px;border:1px solid #3a4050;border-radius:7px;background:#141820;color:#cbd4e3;font-size:12px;cursor:pointer}
+.assume-outcome button[aria-pressed=true]{border-color:#aa8ff1;background:#312442;color:#e4d8ff}
+.assume-outcome button:disabled{opacity:.5;cursor:default}
+.playoff-panel{margin-top:22px}.playoff-body{padding:0 22px 18px}.playoff-game{padding:16px;margin:14px 0;border:1px solid #323848;border-radius:9px;background:#10141c}
+.playoff-game-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.playoff-completed{display:flex;gap:8px;align-items:center;font-size:12px;color:#a7b0c0;margin-top:13px}
+.quality-table{overflow-x:auto;margin:16px 0}.quality-table table{width:100%;border-collapse:collapse}.quality-table td,.quality-table th{padding:10px 12px;text-align:left;border-bottom:1px solid #2c323d;font-size:12px}.quality-table th{color:#abb4c5;font-weight:500}.quality-table td{color:#edf0f7}
+.sync-status{display:flex;flex-direction:column;gap:5px;font-size:11px;color:#9ba7b9;margin:10px 0}.cutoff-input{margin:20px 0 10px}.playoff-summary{margin:20px 0}.playoff-summary .model-text{padding:0 24px 20px}
+.conference-row:has(>.assume-outcome){flex-wrap:wrap;gap:10px}.conference-row>.assume-outcome{margin:0}.pool-panel>.limit-slots{margin:0 24px 18px;padding:16px 0}.limit-slots>.field{min-width:100px;max-width:140px;flex-shrink:0}
+@media(max-width:640px){.data-freshness{padding:10px 16px}.conference-row>.assume-outcome{width:100%}.quality-table th,.quality-table td{padding:8px 6px}}

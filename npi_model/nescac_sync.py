@@ -8,7 +8,7 @@ doesn't cause a fresh request each time.
 """
 
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 import ssl
 import time
 from urllib.error import URLError
@@ -42,6 +42,11 @@ OPPONENT_ALIASES = {
 RESULT_LETTERS = {"W": "win", "T": "tie", "L": "loss"}
 
 _cache = {}
+_status = {}
+
+
+def _timestamp(epoch):
+    return datetime.fromtimestamp(epoch, timezone.utc).isoformat()
 
 
 @dataclass
@@ -54,6 +59,8 @@ class SyncedGame:
 
 def _parse(html):
     soup = BeautifulSoup(html, "html.parser")
+    if not soup.select("li.sidearm-schedule-game"):
+        raise ValueError("No recognizable schedule entries found; no results were updated")
     games = []
     for item in soup.select("li.sidearm-schedule-game"):
         letter = next((c for c in item.get("class", []) if c in RESULT_LETTERS), None)
@@ -71,6 +78,8 @@ def _parse(html):
         games.append(SyncedGame(team=opponent, result=RESULT_LETTERS[letter],
                                 date=date_el.get_text(strip=True) if date_el else None,
                                 score=score_el.get_text(strip=True) if score_el else None))
+    if len({game.team for game in games}) != len(games):
+        raise ValueError("The page includes rematches; review regular-season and playoff results separately")
     return games
 
 
@@ -88,12 +97,28 @@ def fetch_amherst_nescac_results(year=None, *, force=False):
     return games
 
 
-def sync_summary():
-    year = date.today().year
+def sync_summary(year=None):
+    year = year or date.today().year
+    checked = time.time()
+    cached = _cache.get(year)
+    from_cache = bool(cached and checked-cached[0] < CACHE_TTL_SECONDS)
+    source = SCHEDULE_URL.format(year=year)
+    error = None
     try:
         games = fetch_amherst_nescac_results(year)
-        return {"results": [asdict(g) for g in games], "source": SCHEDULE_URL.format(year=year), "error": None}
-    except (URLError, TimeoutError, OSError) as error:
-        return {"results": [], "source": None, "error": f"Could not reach Amherst Athletics: {error}"}
-    except Exception as error:  # the site's markup can change without notice
-        return {"results": [], "source": None, "error": f"Could not read the schedule page: {error}"}
+    except (URLError, TimeoutError, OSError) as failure:
+        error = f"Could not reach Amherst Athletics: {failure}"
+        games = cached[1] if cached else []
+    except Exception as failure:  # the site's markup can change without notice
+        error = f"Could not read the schedule page: {failure}"
+        games = cached[1] if cached else []
+    successful = _cache.get(year)
+    previous = _status.get(year, {})
+    fetched_at = (_timestamp(cached[0]) if cached else previous.get("fetched_at")) if error else (
+        _timestamp(successful[0]) if successful else None)
+    summary = {"results": [asdict(g) for g in games], "source": source, "error": error,
+               "year": year, "checked_at": _timestamp(checked),
+               "fetched_at": fetched_at,
+               "cached": from_cache and not error, "stale": bool(error and cached)}
+    _status[year] = summary
+    return summary

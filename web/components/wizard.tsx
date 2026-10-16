@@ -4,6 +4,8 @@ import { ArrowLeft, ArrowRight, Check, CircleHelp, LoaderCircle } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { Conference, Pool, SeasonRecord, Settings } from '@/components/planning-controls';
 import { Forecast } from '@/components/results';
+import { PlayoffGames } from '@/components/playoff-games';
+import { CutoffReference } from '@/components/data-quality';
 import { Bootstrap, Config, Schedule, Validation, fmt } from '@/lib/model';
 
 const STEPS = [
@@ -54,6 +56,8 @@ export function Wizard({data,config,validation,validationError,onChange,onReset,
             <button type="button" disabled={disabled} aria-label="Raise target NPI" onClick={()=>onChange({...config,target_npi:step(config.target_npi,.5)})}>+</button>
           </div>
           <div className="goal-note"><CircleHelp size={16}/><p>The model treats this as the line to clear, not a prediction.</p></div>
+          <label className="field cutoff-input">Prior-year cutoff (optional reference)<input aria-label="Historical cutoff NPI" type="number" min="0" max="100" step="any" disabled={disabled} value={config.historical_cutoff_npi??''} onChange={event=>{const raw=event.currentTarget.value;const value=event.currentTarget.valueAsNumber;if(raw===''||Number.isFinite(value)&&value>=0&&value<=100)onChange({...config,historical_cutoff_npi:raw===''?null:value});}}/></label>
+          <CutoffReference config={config}/>
         </section>
         <SeasonRecord config={config} data={data} onChange={onChange} disabled={disabled} expanded/>
       </div>}
@@ -62,6 +66,7 @@ export function Wizard({data,config,validation,validationError,onChange,onReset,
 
       {current===2&&<>
         <Pool data={data} config={config} validation={validation} onChange={onChange} disabled={disabled}/>
+        <PlayoffGames data={data} config={config} onChange={onChange} disabled={disabled}/>
         {validationError&&<div className="notice error" role="alert">{validationError}</div>}
       </>}
 
@@ -71,7 +76,7 @@ export function Wizard({data,config,validation,validationError,onChange,onReset,
           <Forecast schedule={schedule} stale={stale}/>
         </div>
         <div className="wizard-summary">
-          <div><span>Schedule size</span><strong>{config.open_slots} games</strong></div>
+          <div><span>Games to choose + playoffs</span><strong>{config.open_slots} + {config.playoff_games?.length??0} games</strong></div>
           <div><span>Available opponents</span><strong>{candidateCount}</strong></div>
           <div><span>Comparison speed</span><strong>{config.analysis_mode}</strong></div>
           <div><span>Target</span><strong>{fmt(config.target_npi)} NPI</strong></div>

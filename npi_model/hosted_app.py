@@ -78,7 +78,10 @@ def create_app(*, state=None, public_origin=None):
 
     @app.get("/api/nescac-results")
     def nescac_results():
-        return jsonify(model.nescac_results())
+        try:
+            return jsonify(model.nescac_results(request.args.get("year")))
+        except ValueError as error:
+            return jsonify(error=str(error)), 400
 
     @app.get("/api/jobs/<job_id>")
     def job_status(job_id):

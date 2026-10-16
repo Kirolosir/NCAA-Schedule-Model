@@ -2,7 +2,7 @@
 
 import argparse
 from dataclasses import asdict, replace
-from datetime import date
+from datetime import date, datetime
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import threading
 import time
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from .game_value import calculate_game_value
@@ -21,7 +21,7 @@ from .planning import candidate_schedules, default_config, parse_plan
 from .schedule_optimizer import rank_schedules
 from .season_npi import SeasonGame, calculate_season_npi
 from .seasons import DEFAULT_SEASON, PLANNING_WEIGHTS, catalog, load_season, planning_ratings, team_history
-from .temporal_model import historical_model
+from .temporal_model import historical_model, historical_accuracy
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,7 +53,7 @@ def validate_config(raw, ratings):
         raise ValueError("Choose the historical or retrospective probability model")
     if config["probability_model"] == "historical" and season not in ("2024", "2025"):
         raise ValueError("The historical probability model requires at least one prior-season transition")
-    for key in ("fixed_games", "candidates", "bands", "required", "preferred", "excluded"):
+    for key in ("fixed_games", "playoff_games", "candidates", "bands", "required", "preferred", "excluded"):
         if not isinstance(config[key], list):
             raise ValueError(f"{key} must be a list")
     for key in ("required", "preferred", "excluded"):
@@ -61,15 +61,17 @@ def validate_config(raw, ratings):
             raise ValueError(f"{key} must contain team names")
     if not isinstance(config["target_team"], str):
         raise ValueError("Choose a target team")
-    for key in ("fixed_games", "candidates"):
+    for key in ("fixed_games", "playoff_games", "candidates"):
         if len(config[key]) > 40:
             raise ValueError(f"{key} may contain at most 40 opponents")
         for row in config[key]:
             if not isinstance(row, dict) or not isinstance(row.get("team"), str):
                 raise ValueError(f"Each entry in {key} needs a team name")
-            allowed = {"team", "category", "result", "probabilities", "decision", "completed"} if key == "fixed_games" else {
+            allowed = {"team", "category", "result", "probabilities", "decision", "completed"} if key != "candidates" else {
                 "team", "recent_npi", "probabilities", "matchup", "venue",
                 "available_dates", "travel_miles", "estimated_cost"}
+            if key == "playoff_games":
+                allowed = (allowed - {"category"}) | {"game_id", "round"}
             if set(row)-allowed:
                 raise ValueError(f"Unknown opponent setting for {row['team']}")
             if "recent_npi" in row:
@@ -80,7 +82,7 @@ def validate_config(raw, ratings):
                     raise ValueError("Probabilities need win, tie, and loss")
                 for outcome, value in p.items():
                     number(value, f"{outcome} probability", 0, 1)
-            if key == "fixed_games":
+            if key in ("fixed_games", "playoff_games"):
                 decision = row.get("decision")
                 if decision not in (None, "advanced_on_penalties", "eliminated_on_penalties"):
                     raise ValueError("Choose a valid penalty-kick decision")
@@ -126,6 +128,19 @@ def validate_config(raw, ratings):
     number(config["probability_slope_scale"], "Probability strength", .05, 2)
     number(config["convergence_tolerance"], "Convergence tolerance", 1e-12, 1e-6)
     number(config["target_npi"], "Target NPI", 0, 100)
+    if config["historical_cutoff_npi"] is not None:
+        number(config["historical_cutoff_npi"], "Historical cutoff NPI", 0, 100)
+    updated = config["results_updated"]
+    if updated is not None:
+        if not isinstance(updated, dict) or set(updated) != {"year", "applied_at", "fetched_at"}:
+            raise ValueError("Result update metadata needs year, applied_at, and fetched_at")
+        number(updated["year"], "Results year", 2000, 2100, integer=True)
+        for key in ("applied_at", "fetched_at"):
+            try:
+                if not isinstance(updated[key], str) or datetime.fromisoformat(updated[key].replace("Z", "+00:00")).tzinfo is None:
+                    raise ValueError()
+            except ValueError as error:
+                raise ValueError("Result update timestamps must include a time zone") from error
     if config["max_total_travel_miles"] is not None:
         number(config["max_total_travel_miles"], "Maximum total travel", 0, 500000)
     if config["max_total_cost"] is not None:
@@ -218,12 +233,13 @@ class AppState:
             outlook = ("favorite" if probabilities.win >= .6 else
                        "underdog" if probabilities.loss >= .6 else "toss_up")
             return {"name": team, "npi": ratings[team], "planning_npi": strengths[team], "rank": rank,
-                    "record": records[team], "history": team_history(team),
+                    "record": records[team], "history": team_history(team, through=season),
                     "matchup_outlook": outlook,
                     "matchup_probabilities": asdict(probabilities)}
         return {"config": config, "source": data["source"], "seasons": catalog(),
                 "teams": [team_row(team, rank) for rank, team in enumerate(ordered, 1)],
                 "model": asdict(model), "model_diagnostics": diagnostics,
+                "historical_accuracy": historical_accuracy(season),
                 "rating_range": [min(ratings.values()), max(ratings.values())],
                 "report": self.reference if season == DEFAULT_SEASON else None}
 
@@ -343,8 +359,14 @@ class AppState:
                 job["finished"] = time.time()
                 self.active_jobs.discard(job_id)
 
-    def nescac_results(self):
-        return nescac_sync.sync_summary()
+    def nescac_results(self, year=None):
+        if year is not None:
+            try:
+                year = int(year)
+            except (TypeError, ValueError) as error:
+                raise ValueError("Choose a results year between 2000 and 2100") from error
+            number(year, "Results year", 2000, 2100, integer=True)
+        return nescac_sync.sync_summary(year)
 
     def job(self, job_id, *, cancel=False, owner=None):
         with self.lock:
@@ -403,7 +425,11 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/health":
             return self.reply({"status": "ok", "app": "ncaa-schedule-lab", "teams": len(self.state.ratings)})
         if path == "/api/nescac-results":
-            return self.reply(self.state.nescac_results())
+            try:
+                year = parse_qs(urlparse(self.path).query).get("year", [None])[0]
+                return self.reply(self.state.nescac_results(year))
+            except ValueError as error:
+                return self.reply({"error": str(error)}, 400)
         if path.startswith("/api/jobs/"):
             try:
                 return self.reply(self.state.job(path.rsplit("/", 1)[-1]))

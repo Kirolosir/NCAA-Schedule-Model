@@ -2,7 +2,7 @@
 
 [Open the hosted app](https://ncaa-schedule-lab.onrender.com)
 
-A full-stack planning tool for comparing five-game nonconference schedules for Amherst men's soccer. The application models wins, ties, and losses, recalculates NPI across the Division III schedule graph, and ranks schedule options under user-defined constraints.
+A full-stack planning tool for comparing nonconference schedules for Amherst men's soccer, with five games as the default. The application models wins, ties, and losses, recalculates NPI across the Division III schedule graph, and ranks schedule options under user-defined constraints.
 
 The 2025 validation set contains 402 rated teams and 3,528 eligible games. The division solver reproduces published 2025 NPI values within 0.001 from multiple starting seeds.
 
@@ -26,7 +26,7 @@ Python, NumPy, React, TypeScript, Vite, Gunicorn, Render
 
 - Compares named opponents or NPI/rank bands.
 - Shows the effect of a win, tie, or loss against one opponent.
-- Ranks five-game schedules by projected season NPI.
+- Ranks schedules of the selected size by projected season NPI.
 - Tracks each schedule against an editable target NPI.
 - Supports favorite, toss-up, underdog, and custom matchup assumptions.
 - Filters by required, preferred, unavailable, date, travel, and cost inputs.
@@ -34,6 +34,14 @@ Python, NumPy, React, TypeScript, Vite, Gunicorn, Render
 - Uses the current record and completed opponents rather than treating identical W-L-T records as equivalent.
 - Models penalty-kick advancement as an NPI tie where applicable.
 - Shows projected averages, high/low scenarios, and likely ranges for schedule risk.
+- Offers one-click “Assume win / draw / loss” controls and an editable historical cutoff reference alongside the selected target and gap.
+- Adds playoff meetings separately from regular-season games. Rematches use independent results and count as separate games for both teams; penalty decisions still count as draws.
+- Shows the ratings snapshot, results year, last successful website fetch, last application to the plan, and failed or cached checks. Website scores are reviewed before being applied.
+- Displays held-out historical probability accuracy under “How the model works”: log loss, multiclass Brier score, most-likely outcome accuracy, and win-chance calibration against a training-only constant baseline.
+
+Playoff games are included in every schedule being compared and do not consume regular-season pool slots. Add only the rounds the scenario should include; bracket advancement is not simulated automatically. Old saved plans remain compatible.
+
+The default cutoff reference of 56.54 was supplied by the coach; its year is unconfirmed. It is editable and is not treated as this season's qualifying line. Historical accuracy checks use prior-season ratings and untouched test-season outcomes. They do not validate manual assumptions, the planning-strength blend, or future schedule forecasts.
 
 ## NPI model
 

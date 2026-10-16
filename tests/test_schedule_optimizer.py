@@ -17,6 +17,7 @@ from npi_model.schedule_optimizer import (
 )
 from npi_model.schedule_simulator import OutcomeProbabilities
 from npi_model.seasons import load_season, planning_ratings, season_path
+from npi_model.season_npi import SeasonGame, calculate_season_npi
 
 
 class RealDataCase(unittest.TestCase):
@@ -255,6 +256,58 @@ class TestScheduleScoring(RealDataCase):
         self.assertEqual(self.games, original_games)
         self.assertEqual(self.ratings, original_ratings)
         self.assertEqual(json.dumps(config, sort_keys=True), original_config)
+
+    def test_playoff_rematch_keeps_both_results_and_matches_reference(self):
+        config = default_config('2024')
+        config['playoff_games'] = [{'game_id': 'playoff:quarterfinal', 'team': 'Tufts',
+                                   'round': 'Quarterfinal', 'result': 'loss'}]
+        next(g for g in config['fixed_games'] if g['team'] == 'Tufts')['result'] = 'win'
+        snapshot = json.dumps(config, sort_keys=True)
+        original_games, original_ratings = list(self.games), dict(self.ratings)
+        target, fixed, candidates, _ = parse_plan(config, self.ratings)
+        evaluator = ScheduleEvaluator(self.games, self.ratings, target, fixed, candidates, self.model)
+        selected = ('Babson',)
+        values = evaluator.sample(selected, samples=2, seed=1, forced={'Babson': 'win'})
+        graph = evaluator.background + [DivisionGame(target, g.team, g.result) for g in fixed]
+        graph.append(DivisionGame(target, 'Babson', 'win'))
+        expected = iterate_division_npi(graph, eligible_teams=self.ratings,
+                                       initial_ratings=self.ratings).ratings[target]
+        self.assertEqual([(g.team, g.result) for g in fixed if g.team == 'Tufts'],
+                         [('Tufts', 'win'), ('Tufts', 'loss')])
+        self.assertAlmostEqual(values[0], expected, places=6)
+        self.assertEqual(values[0], values[1])
+        season = [SeasonGame(g.team, self.ratings[g.team], g.result) for g in fixed]
+        approximate = calculate_season_npi(season+[SeasonGame('Babson', self.ratings['Babson'], 'win')]).npi
+        self.assertEqual(evaluator.approximate_sample(selected, samples=2, seed=1,
+                                                     forced={'Babson': 'win'}), [approximate]*2)
+        self.assertEqual(self.games, original_games)
+        self.assertEqual(self.ratings, original_ratings)
+        self.assertEqual(json.dumps(config, sort_keys=True), snapshot)
+
+    def test_playoff_random_stream_and_override_are_independent_of_regular_game(self):
+        fixed = (FixedGame('Tufts'), FixedGame('Tufts', 'playoff',
+                                              game_id='playoff:quarterfinal', round='Quarterfinal'))
+        evaluator = ScheduleEvaluator(self.games, self.ratings, 'Amherst', fixed, (), self.model)
+        self.assertNotEqual(_uniforms(1, 'Tufts', 8), _uniforms(1, 'playoff:quarterfinal', 8))
+        regular_win = evaluator.sample((), samples=2, seed=4,
+                                      forced={'Tufts': 'win', 'playoff:quarterfinal': 'loss'})
+        both_wins = evaluator.sample((), samples=2, seed=4,
+                                    forced={'Tufts': 'win', 'playoff:quarterfinal': 'win'})
+        self.assertNotEqual(regular_win, both_wins)
+        self.assertEqual(evaluator.cache.keys(),
+                         {(('Tufts', 'win'), ('playoff:quarterfinal', 'loss')),
+                          (('Tufts', 'win'), ('playoff:quarterfinal', 'win'))})
+
+    def test_playoff_can_repeat_a_pool_opponent_without_removing_it(self):
+        config = default_config('2024')
+        config['playoff_games'] = [{'game_id': 'playoff:semifinal', 'team': 'Babson',
+                                   'round': 'Semifinal', 'result': 'tie',
+                                   'decision': 'eliminated_on_penalties'}]
+        _, fixed, candidates, _ = parse_plan(config, self.ratings)
+        self.assertIn('Babson', [c.team for c in candidates])
+        evaluator = ScheduleEvaluator(self.games, self.ratings, 'Amherst', fixed, candidates, self.model)
+        self.assertTrue(evaluator.sample(('Babson',), samples=2, seed=2, forced={'Babson': 'win'}))
+        self.assertEqual(fixed[-1].result, 'tie')
 
     def test_conditional_impacts_equal_reference_full_division(self):
         e = self.evaluator()

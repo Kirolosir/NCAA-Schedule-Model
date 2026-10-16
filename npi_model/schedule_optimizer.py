@@ -55,6 +55,8 @@ class ScheduleEvaluator:
         self.ratings = dict(ratings)
         self.target = target
         self.fixed = fixed
+        self.teams = {c.team: c.team for c in candidates}
+        self.teams.update({g.key: g.team for g in fixed})
         self.background = [g for g in games if target not in (g.team_a, g.team_b)]
         self.tolerance = tolerance
         self.cache = {}
@@ -67,7 +69,7 @@ class ScheduleEvaluator:
         self.probabilities = {
             c.team: c.probabilities or model.predict(strength, c.recent_npi) for c in candidates
         }
-        self.probabilities.update({g.team: g.probabilities or model.predict(strength, probability_ratings[g.team])
+        self.probabilities.update({g.key: g.probabilities or model.predict(strength, probability_ratings[g.team])
                                    for g in fixed})
 
     def solve(self, outcomes):
@@ -75,7 +77,7 @@ class ScheduleEvaluator:
             self.checkpoint()
         key = tuple(sorted(outcomes))
         if key not in self.cache:
-            games = self.background + [DivisionGame(self.target, t, r) for t, r in key]
+            games = self.background + [DivisionGame(self.target, self.teams[t], r) for t, r in key]
             result = CompiledDivision(games, self.ratings).solve(
                 self._warm_ratings, tolerance=self.tolerance, exact=False,
                 checkpoint=self.checkpoint)
@@ -89,7 +91,7 @@ class ScheduleEvaluator:
             self.checkpoint()
         key = (iterations, tuple(sorted(outcomes)))
         if key not in self.screen_cache:
-            games = self.background + [DivisionGame(self.target, t, r) for t, r in key[1]]
+            games = self.background + [DivisionGame(self.target, self.teams[t], r) for t, r in key[1]]
             ratings = CompiledDivision(games, self.ratings).estimate(
                 self.ratings, iterations=iterations, checkpoint=self.checkpoint)
             self.screen_cache[key] = ratings[self.target]
@@ -97,15 +99,15 @@ class ScheduleEvaluator:
 
     def sample(self, teams, *, samples, seed, forced=None):
         forced = forced or {}
-        names = [g.team for g in self.fixed] + list(teams)
+        names = [g.key for g in self.fixed] + list(teams)
         if not isinstance(samples, int) or samples < 1:
             raise ValueError("samples must be a positive integer")
         if len(set(names)) != len(names):
-            raise ValueError("each opponent may appear only once")
+            raise ValueError("each game may appear only once; rematches need separate playoff entries")
         if not set(forced) <= set(names) or any(r not in ("win", "tie", "loss") for r in forced.values()):
             raise ValueError("forced results must name scheduled opponents and valid outcomes")
         draws = {t: _uniforms(seed, t, samples) for t in names}
-        locked = {g.team: g.result for g in self.fixed if g.result is not None}
+        locked = {g.key: g.result for g in self.fixed if g.result is not None}
         if set(forced) & set(locked):
             raise ValueError("cannot override a locked result")
         results = []
@@ -117,27 +119,27 @@ class ScheduleEvaluator:
 
     def approximate_sample(self, teams, *, samples, seed, forced=None):
         forced = forced or {}
-        names = [g.team for g in self.fixed] + list(teams)
+        names = [g.key for g in self.fixed] + list(teams)
         draws = {t: _uniforms(seed, t, samples) for t in names}
-        locked = {g.team: g.result for g in self.fixed if g.result is not None}
+        locked = {g.key: g.result for g in self.fixed if g.result is not None}
         results = []
         for i in range(samples):
-            season = [SeasonGame(t, self.ratings[t], locked.get(t) or forced.get(t) or
+            season = [SeasonGame(self.teams[t], self.ratings[self.teams[t]], locked.get(t) or forced.get(t) or
                                  _draw(self.probabilities[t], draws[t][i])) for t in names]
             results.append(calculate_season_npi(season).npi)
         return results
 
     def screening_sample(self, teams, *, samples, seed, forced=None):
         forced = forced or {}
-        names = [g.team for g in self.fixed] + list(teams)
+        names = [g.key for g in self.fixed] + list(teams)
         draws = {t: _uniforms(seed, t, samples) for t in names}
-        locked = {g.team: g.result for g in self.fixed if g.result is not None}
+        locked = {g.key: g.result for g in self.fixed if g.result is not None}
         return [self.estimate([(t, locked.get(t) or forced.get(t) or
                                _draw(self.probabilities[t], draws[t][i])) for t in names])
                 for i in range(samples)]
 
     def stress(self, teams, result):
-        fixed = [(g.team, g.result or result) for g in self.fixed]
+        fixed = [(g.key, g.result or result) for g in self.fixed]
         return self.solve(fixed+[(t, result) for t in teams])
 
 

@@ -1,6 +1,7 @@
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from npi_model.app_server import AppState
 
@@ -57,6 +58,17 @@ class TestHostedApp(unittest.TestCase):
         response = self.client.post("/api/jobs", json={}, base_url=self.origin,
                                     headers={"Origin": self.origin, "Sec-Fetch-Site": "cross-site"})
         self.assertEqual(response.status_code, 403)
+
+    def test_results_year_and_failure_status_pass_through_the_api(self):
+        failure = {'results': [], 'year': 2026, 'checked_at': '2026-10-16T12:00:00+00:00',
+                   'fetched_at': None, 'cached': False, 'stale': False,
+                   'source': 'https://athletics.amherst.edu/sports/mens-soccer/schedule/2026',
+                   'error': 'Could not reach Amherst Athletics'}
+        with patch('npi_model.nescac_sync.sync_summary', return_value=failure) as fetch:
+            self.assertEqual(self.get('/api/nescac-results?year=2026').get_json(), failure)
+            fetch.assert_called_once_with(2026)
+        self.assertEqual(self.get('/api/nescac-results?year=invalid').status_code, 400)
+        self.assertEqual(self.get('/api/nescac-results?year=99999').status_code, 400)
 
     def test_validation_and_real_explorer(self):
         self.assertEqual(self.post("/api/validate", {}).get_json()["combinations"], 21)

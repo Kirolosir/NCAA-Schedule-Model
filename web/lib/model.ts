@@ -6,11 +6,14 @@ export type Priority = 'required' | 'preferred' | 'available';
 export type Candidate = {team: string; recent_npi?: number; probabilities?: Probabilities; matchup?: Matchup;
   venue?: Venue; available_dates?: string[]; travel_miles?: number; estimated_cost?: number};
 export type FixedGame = {team: string; category?: string; result?: Outcome; probabilities?: Probabilities; decision?: 'advanced_on_penalties'|'eliminated_on_penalties'; completed?: boolean};
+export type PlayoffGame = FixedGame & {game_id:string; round:'Quarterfinal'|'Semifinal'|'Final'|'Playoff'};
 export type Band = {label: string; lower: number | null; upper: number | null; member_count?: number; representatives?: string[]};
 export type Config = {
   season: string; probability_model: 'historical' | 'retrospective';
   target_team: string; mode: 'teams' | 'bands'; band_scale: 'rating' | 'rank';
   fixed_games: FixedGame[]; candidates: Candidate[]; bands: Band[];
+  playoff_games?: PlayoffGame[]; historical_cutoff_npi?:number|null;
+  results_updated?:{year:number; applied_at:string; fetched_at:string}|null;
   representatives_per_band: number; open_slots: number; required: string[]; preferred: string[]; excluded: string[];
   max_total_travel_miles: number | null; max_total_cost: number | null;
   samples: number; validation_samples: number; insight_samples: number; top_n: number;
@@ -36,13 +39,20 @@ export type Team = {name: string; npi: number; planning_npi:number; rank: number
   matchup_outlook:'favorite'|'toss_up'|'underdog'; matchup_probabilities:Probabilities};
 export type SeasonSource = {season:string; cutoff:string; snapshot:string; rating_kind:string; eligible_npi_teams:number; eligible_npi_games:number; validation:{max_published_error?:number; iterations?:number; published_npi_available?:boolean}};
 export type Bootstrap = {config: Config; teams: Team[]; source: SeasonSource; seasons:SeasonSource[]; report: Report | null;
+  historical_accuracy:HistoricalAccuracy;
   deployment?: {hosted: boolean; max_job_minutes: number};
   rating_range:[number,number]; model_diagnostics?:{holdout_log_loss:number;constant_holdout_log_loss:number;recent_only_holdout_log_loss:number;note:string};
   model: {slope: number; tie_log_weight: number; fit_log_loss: number; sample_count: number;method:string;training_seasons:string[];holdout_season:string|null;out_of_time_log_loss:number|null}};
 export type Validation = {candidate_count: number; combinations: number; unfiltered_combinations:number; bands: Band[]; candidates: Candidate[]};
 export type Job = {id: string; status: string; message: string; progress: number; report?: Report; config: Config};
 export type NescacResult = {team: string; result: Outcome; date: string | null; score: string | null};
-export type NescacSync = {results: NescacResult[]; source: string | null; error: string | null};
+export type NescacSync = {results: NescacResult[]; source: string | null; error: string | null;
+  year:number; checked_at:string; fetched_at:string|null; cached:boolean; stale:boolean};
+export type AccuracyScores = {games:number; log_loss:number; brier_score:number; accuracy:number;
+  win_calibration:{lower:number;upper:number;count:number;predicted_win_rate:number|null;actual_win_rate:number|null}[]};
+export type HistoricalAccuracy = {available:boolean; reason?:string; training_seasons?:string[]; holdout_season?:string;
+  predictor_season?:string;predictor_cutoff?:string;excluded_games?:number;model?:AccuracyScores;baseline?:AccuracyScores;
+  log_loss_improvement?:number;scope?:string;note?:string};
 export type Explore = {opponent_npi: number; baseline_npi: number; probabilities: Probabilities;
   outcomes: Record<Outcome, {npi: number; impact: number; game_value?: {total: number; quality_win_bonus: number}}>;
   curve: {npi: number; outcomes: Record<Outcome, {impact: number}>}[]};
@@ -56,3 +66,6 @@ export async function api<T>(path: string, body?: unknown, signal?: AbortSignal)
 }
 export const fmt = (value?: number, digits = 3) => Number.isFinite(value) ? value!.toFixed(digits) : '—';
 export const signed = (value?: number) => Number.isFinite(value) ? `${value! >= 0 ? '+' : ''}${fmt(value)}` : '—';
+export const allGames = (config:Config):FixedGame[] => [...config.fixed_games,...(config.playoff_games??[])];
+export const gameLabel = (game:FixedGame) => 'round' in game ? `${game.team} (${game.round})` : game.team;
+export const restoreConfig = (config:Config):Config => ({playoff_games:[],historical_cutoff_npi:56.54,results_updated:null,...config});
