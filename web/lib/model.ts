@@ -31,6 +31,7 @@ export type Schedule = {rank: number; opponents: string[]; projection: Summary; 
   paired_gap_from_leader: Summary; stress_all_unlocked_wins: number; stress_all_unlocked_losses: number;
   opponent_impacts: Risk[]; reasoning: string[]};
 export type Report = {config: Config; target_team: string; top_schedules: Schedule[]; validated_finalists: Schedule[];
+  sensitivity?:SensitivityReport;
   screening: unknown[]; standalone_opponents: Risk[]; baseline_projection: Summary; bands: Band[];
   division_solves: number; source: {cutoff: string}; limitations: string[];
   calculation?: {screening:string; finalists:string; opponent_impacts:string}};
@@ -40,6 +41,7 @@ export type Team = {name: string; npi: number; planning_npi:number; rank: number
 export type SeasonSource = {season:string; cutoff:string; snapshot:string; rating_kind:string; eligible_npi_teams:number; eligible_npi_games:number; validation:{max_published_error?:number; iterations?:number; published_npi_available?:boolean}};
 export type Bootstrap = {config: Config; teams: Team[]; source: SeasonSource; seasons:SeasonSource[]; report: Report | null;
   historical_accuracy:HistoricalAccuracy;
+  planning_backtest:PlanningBacktest;
   deployment?: {hosted: boolean; max_job_minutes: number};
   rating_range:[number,number]; model_diagnostics?:{holdout_log_loss:number;constant_holdout_log_loss:number;recent_only_holdout_log_loss:number;note:string};
   model: {slope: number; tie_log_weight: number; fit_log_loss: number; sample_count: number;method:string;training_seasons:string[];holdout_season:string|null;out_of_time_log_loss:number|null}};
@@ -53,6 +55,14 @@ export type AccuracyScores = {games:number; log_loss:number; brier_score:number;
 export type HistoricalAccuracy = {available:boolean; reason?:string; training_seasons?:string[]; holdout_season?:string;
   predictor_season?:string;predictor_cutoff?:string;excluded_games?:number;model?:AccuracyScores;baseline?:AccuracyScores;
   log_loss_improvement?:number;scope?:string;note?:string};
+export type PlanningBacktest = HistoricalAccuracy & {as_of_season?:string;complete_three_season_blend?:boolean;
+  strength_sources?:{season:string;cutoff:string;weight:number}[];single_season_model?:AccuracyScores;limitations?:string};
+export type SensitivityRow = {option:number;opponents:string[];rank:number;projection:Summary;target_hit_rate:number;gap_from_leader:Summary};
+export type SensitivityReport = {config:Config;profiles:{key:string;label:string;target_strength:number;effective_shift:number;schedules:SensitivityRow[]}[];
+  schedules:{option:number;opponents:string[];lowest_profile_mean:number;highest_profile_mean:number;largest_gap_to_leader:number;first_place_profiles:number}[];
+  most_consistent_option:number;samples_per_profile:number;strength_shift:number;division_solves:number;scope:string;note:string};
+export type PortablePlan = {format:'schedule-lab-plan';version:1;name:string;exported_at:string;config:Config;data:unknown};
+export type ImportedPlan = {name:string;config:Config;data_matches:boolean;notices:string[]};
 export type Explore = {opponent_npi: number; baseline_npi: number; probabilities: Probabilities;
   outcomes: Record<Outcome, {npi: number; impact: number; game_value?: {total: number; quality_win_bonus: number}}>;
   curve: {npi: number; outcomes: Record<Outcome, {impact: number}>}[]};
@@ -69,3 +79,10 @@ export const signed = (value?: number) => Number.isFinite(value) ? `${value! >= 
 export const allGames = (config:Config):FixedGame[] => [...config.fixed_games,...(config.playoff_games??[])];
 export const gameLabel = (game:FixedGame) => 'round' in game ? `${game.team} (${game.round})` : game.team;
 export const restoreConfig = (config:Config):Config => ({playoff_games:[],historical_cutoff_npi:56.54,results_updated:null,...config});
+function canonical(value:unknown):unknown {
+  if(Array.isArray(value))return value.map(canonical);
+  if(value!==null&&typeof value==='object')return Object.fromEntries(Object.entries(value)
+    .filter(([,entry])=>entry!==undefined).sort(([a],[b])=>a.localeCompare(b)).map(([key,entry])=>[key,canonical(entry)]));
+  return value;
+}
+export const sameConfig = (a:Config|null,b:Config|null) => JSON.stringify(canonical(a))===JSON.stringify(canonical(b));

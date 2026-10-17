@@ -22,6 +22,9 @@ from .schedule_optimizer import rank_schedules
 from .season_npi import SeasonGame, calculate_season_npi
 from .seasons import DEFAULT_SEASON, PLANNING_WEIGHTS, catalog, load_season, planning_ratings, team_history
 from .temporal_model import historical_model, historical_accuracy
+from .backtest import planning_backtest
+from .plan_files import export_plan, import_plan
+from .sensitivity import compare_assumptions, validate_shortlist
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -179,7 +182,7 @@ class CalculationCancelled(Exception):
 
 
 class AppState:
-    def __init__(self, *, ranker=rank_schedules, max_job_seconds=None,
+    def __init__(self, *, ranker=rank_schedules, assumption_ranker=compare_assumptions, max_job_seconds=None,
                  max_concurrent_jobs=2):
         if not isinstance(max_concurrent_jobs, int) or max_concurrent_jobs < 1:
             raise ValueError("max_concurrent_jobs must be a positive integer")
@@ -187,6 +190,7 @@ class AppState:
         self.models = {}
         self.model = self.model_for(DEFAULT_SEASON, "historical")
         self.ranker = ranker
+        self.assumption_ranker = assumption_ranker
         self.max_job_seconds = max_job_seconds
         self.max_concurrent_jobs = max_concurrent_jobs
         self.lock = threading.Lock()
@@ -240,6 +244,7 @@ class AppState:
                 "teams": [team_row(team, rank) for rank, team in enumerate(ordered, 1)],
                 "model": asdict(model), "model_diagnostics": diagnostics,
                 "historical_accuracy": historical_accuracy(season),
+                "planning_backtest": planning_backtest(season),
                 "rating_range": [min(ratings.values()), max(ratings.values())],
                 "report": self.reference if season == DEFAULT_SEASON else None}
 
@@ -293,6 +298,26 @@ class AppState:
         season = raw.get("season", DEFAULT_SEASON) if isinstance(raw, dict) else DEFAULT_SEASON
         data, ratings, games = load_season(season)
         config, summary = validate_config(raw, ratings)
+        return self._launch(config, summary, owner=owner)
+
+    def start_sensitivity(self, raw, *, owner=None):
+        if not isinstance(raw, dict) or set(raw)-{'config', 'schedules', 'strength_shift'} or not {'config', 'schedules'} <= set(raw):
+            raise ValueError('Sensitivity needs a plan and its displayed schedules')
+        config, summary = self.validate(raw['config'])
+        _, ratings, _ = load_season(config['season'])
+        shift = raw.get('strength_shift', 3.0)
+        schedules = validate_shortlist(config, ratings, raw['schedules'], shift)
+        return self._launch(config, summary, owner=owner, kind='sensitivity',
+                            schedules=schedules, strength_shift=shift)
+
+    def export_plan(self, raw):
+        return export_plan(raw, self.validate)
+
+    def import_plan(self, raw):
+        return import_plan(raw, self.validate)
+
+    def _launch(self, config, summary, *, owner, kind='comparison', schedules=None, strength_shift=3.0):
+        season = config['season']
         with self.lock:
             if len(self.active_jobs) >= self.max_concurrent_jobs:
                 raise RuntimeError(f"{self.max_concurrent_jobs} comparisons are already running. Cancel one or wait for one to finish.")
@@ -305,6 +330,7 @@ class AppState:
             job_id = uuid4().hex
             job = {"id": job_id, "status": "running", "message": "Preparing division model", "progress": 0,
                    "started": time.time(), "config": config, "summary": summary, "season": season,
+                   "kind": kind, "schedules": schedules, "strength_shift": strength_shift,
                    "owner": owner, "cancel": threading.Event()}
             self.jobs[job_id] = job
             self.active_jobs.add(job_id)
@@ -332,13 +358,18 @@ class AppState:
                 level = .76+.14*fraction
             elif message.startswith("Evaluated"):
                 level = min(.99, level+.005)
+            elif message.startswith('Assumptions'):
+                level = .95*fraction
             with self.lock:
                 if job["status"] == "running":
                     job.update(message=message, progress=level)
         progress.checkpoint = checkpoint
         try:
             data, ratings, games = load_season(job["season"])
-            report = self.ranker(games, ratings, job["config"], progress=progress)
+            report = (self.assumption_ranker(games, ratings, job['config'], job['schedules'],
+                                             job['strength_shift'], progress=progress)
+                      if job['kind'] == 'sensitivity' else
+                      self.ranker(games, ratings, job["config"], progress=progress))
             if job["cancel"].is_set():
                 raise CalculationCancelled()
             report["source"] = data["source"]
@@ -464,6 +495,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(self.state.explore(data))
             if path == "/api/jobs":
                 return self.reply(self.state.start(data), 202)
+            if path == '/api/sensitivity-jobs':
+                return self.reply(self.state.start_sensitivity(data), 202)
+            if path == '/api/plans/export':
+                return self.reply(self.state.export_plan(data))
+            if path == '/api/plans/import':
+                return self.reply(self.state.import_plan(data))
             if path.startswith("/api/jobs/") and path.endswith("/cancel"):
                 return self.reply(self.state.job(path.split("/")[-2], cancel=True))
             return self.reply({"error": "Endpoint not found"}, 404)

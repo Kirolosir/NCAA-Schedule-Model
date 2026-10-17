@@ -6,8 +6,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Scenarios } from '@/components/scenarios';
 import { coachReportHtml, comparisonCsv } from '@/lib/exports';
-import { allGames, Config, fmt, Outcome, Report, Schedule, signed } from '@/lib/model';
+import { allGames, Config, fmt, Outcome, Report, sameConfig, Schedule, SensitivityReport, signed } from '@/lib/model';
 import { CutoffReference } from '@/components/data-quality';
+import { SensitivityPanel } from '@/components/sensitivity';
 
 function joinAnd(items:string[]):string{
   if(items.length<=1)return items.join('');
@@ -25,6 +26,8 @@ export function Results({report,selected,onSelect,stale,onEdit,onOpenScenario}:{
   report:Report;selected:number;onSelect:(n:number)=>void;stale:boolean;onEdit:()=>void;onOpenScenario:(config:Config)=>void;
 }) {
   const [exportOpen,setExportOpen]=useState(false);
+  const [sensitivity,setSensitivity]=useState<SensitivityReport|null>(null);
+  const exportedReport=sensitivity&&sameConfig(sensitivity.config,report.config)?{...report,sensitivity}:report;
   const schedule=report.top_schedules[selected]||report.top_schedules[0];
   const alternatives=report.top_schedules.filter(row=>row.rank!==schedule.rank);
   const scale=Math.max(.5,...schedule.opponent_impacts.flatMap(r=>[Math.abs(r.win.impact.mean),Math.abs(r.loss.impact.mean)]));
@@ -39,7 +42,7 @@ export function Results({report,selected,onSelect,stale,onEdit,onOpenScenario}:{
   const winEquivalents=(row:{win:number;tie:number})=>row.win+row.tie/2;
   const floor=(row:{win:number;tie:number})=>{const value=winEquivalents(row);return value>=10?`${fmt(value,1)} win-equivalents · 10-game floor reached`:`${fmt(value,1)} win-equivalents · ${fmt(10-value,1)} short of the floor`;};
   function download(filename:string,contents:string,type:string){const url=URL.createObjectURL(new Blob([contents],{type}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  function printReport(){const frame=document.createElement('iframe');frame.title='Printable schedule comparison';frame.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';document.body.append(frame);const printWindow=frame.contentWindow;if(!printWindow){frame.remove();return;}printWindow.document.open();printWindow.document.write(coachReportHtml(report,schedule));printWindow.document.close();setExportOpen(false);setTimeout(()=>{printWindow.focus();printWindow.print();printWindow.addEventListener('afterprint',()=>frame.remove(),{once:true});},250);setTimeout(()=>frame.remove(),60000);}
+  function printReport(){const frame=document.createElement('iframe');frame.title='Printable schedule comparison';frame.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';document.body.append(frame);const printWindow=frame.contentWindow;if(!printWindow){frame.remove();return;}printWindow.document.open();printWindow.document.write(coachReportHtml(exportedReport,schedule));printWindow.document.close();setExportOpen(false);setTimeout(()=>{printWindow.focus();printWindow.print();printWindow.addEventListener('afterprint',()=>frame.remove(),{once:true});},250);setTimeout(()=>frame.remove(),60000);}
   const money=(value:number)=>new Intl.NumberFormat(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0}).format(value);
   const day=(value:string|null)=>value?new Date(`${value}T12:00:00`).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Date open';
   const gapPositive=schedule.target_gap.mean>=0;
@@ -52,7 +55,7 @@ export function Results({report,selected,onSelect,stale,onEdit,onOpenScenario}:{
         <Button className="primary-action" onClick={()=>setExportOpen(true)}><Download size={15}/>Export results</Button>
       </div>
     </div>
-    <Dialog open={exportOpen} onOpenChange={setExportOpen}><DialogContent className="export-dialog"><DialogHeader><DialogTitle>Share this comparison</DialogTitle><DialogDescription>Choose a coach-ready report, a spreadsheet for further analysis, or the complete model data.</DialogDescription></DialogHeader><div className="export-options"><button onClick={printReport}><span><Printer/></span><strong>Print or save as PDF</strong><small>A clean report with all rankings and full details for Option {schedule.rank}.</small></button><button onClick={()=>download('schedule-lab-comparison.csv',comparisonCsv(report),'text/csv;charset=utf-8')}><span><FileSpreadsheet/></span><strong>Download spreadsheet</strong><small>Every option, opponent, probability, NPI impact, date, venue, travel, and cost.</small></button><button onClick={()=>download('schedule-lab-full-data.json',JSON.stringify(report,null,2),'application/json')}><span><Database/></span><strong>Download full data</strong><small>The complete model output in JSON, with full internal precision.</small></button></div></DialogContent></Dialog>
+    <Dialog open={exportOpen} onOpenChange={setExportOpen}><DialogContent className="export-dialog"><DialogHeader><DialogTitle>Share this comparison</DialogTitle><DialogDescription>Choose a coach-ready report, a spreadsheet for further analysis, or the complete model data.</DialogDescription></DialogHeader><div className="export-options"><button onClick={printReport}><span><Printer/></span><strong>Print or save as PDF</strong><small>A clean report with all rankings and full details for Option {schedule.rank}.</small></button><button onClick={()=>download('schedule-lab-comparison.csv',comparisonCsv(exportedReport),'text/csv;charset=utf-8')}><span><FileSpreadsheet/></span><strong>Download spreadsheet</strong><small>Every option, opponent, probability, NPI impact, date, venue, travel, and cost.</small></button><button onClick={()=>download('schedule-lab-full-data.json',JSON.stringify(exportedReport,null,2),'application/json')}><span><Database/></span><strong>Download full data</strong><small>The complete model output in JSON, with full internal precision.</small></button></div></DialogContent></Dialog>
 
     <section className="hero-card">
       <div className="hero-kicker"><Trophy size={17}/><span>{report.top_schedules.length>1?`OPTION ${schedule.rank} OF ${report.top_schedules.length}`:'OUR RECOMMENDATION'}</span></div>
@@ -98,6 +101,7 @@ export function Results({report,selected,onSelect,stale,onEdit,onOpenScenario}:{
       </button>)}</div>
     </>}
 
+    <SensitivityPanel report={report} onComplete={setSensitivity}/>
     <div className="results-bottom"><span><Check size={14}/>{report.division_solves.toLocaleString()} full-division checks completed</span><span>{report.calculation?.opponent_impacts==='fixed-rating quick estimate'?'Final schedules use the full division · game breakdown is a quick estimate':`Every result uses the full division · ${report.source.cutoff}`}</span></div>
   </div></section>;
 }

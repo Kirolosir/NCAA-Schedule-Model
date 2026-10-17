@@ -41,7 +41,13 @@ Python, NumPy, React, TypeScript, Vite, Gunicorn, Render
 
 Playoff games are included in every schedule being compared and do not consume regular-season pool slots. Add only the rounds the scenario should include; bracket advancement is not simulated automatically. Old saved plans remain compatible.
 
-The default cutoff reference of 56.54 was supplied by the coach; its year is unconfirmed. It is editable and is not treated as this season's qualifying line. Historical accuracy checks use prior-season ratings and untouched test-season outcomes. They do not validate manual assumptions, the planning-strength blend, or future schedule forecasts.
+The default cutoff reference of 56.54 was supplied by the coach; its year is unconfirmed. It is editable and is not treated as this season's qualifying line. Historical checks use only pre-test information and untouched test-season outcomes. The original prior-snapshot model is a benchmark alongside the planning-blend replay described below. These checks do not validate manual assumptions or future schedule NPI.
+
+### Planning backtest, sensitivity, and portable setups
+
+- **Planning backtest:** “How the model works” replays the exact strength-building function before the test season. The 2025 replay uses 2024/2023/2022 snapshots at 50/30/20 and a model fitted without 2025 outcomes. It compares log loss, Brier score, accuracy, and calibration with a prior-snapshot model and constant baseline. The 2024 replay uses the existing older-season one-snapshot fallback. These are game-probability checks, not validation of hypothetical future NPI or scheduling choices. Run the read-only report from the terminal with `python -m npi_model.backtest --season 2025`.
+- **Sensitivity:** “Compare assumptions” on Results runs the same displayed shortlist under entered form and a configurable lower/higher team strength (default ±3 NPI). Every case uses the full division solver with paired random draws. Completed results, assumed outcomes, and explicit probabilities are preserved. The table shows conditional means, target hit rates, and gaps to each profile's leader; the mean range is not a confidence interval. Completed sensitivity results are included in JSON, CSV, and printable exports.
+- **Portable setups:** Saved plans can export/import versioned `.plan.json` files. Import uses normal server validation, adds a copy without overwriting saved plans, and discloses a changed dataset/model fingerprint. Files contain inputs, including playoff rematches; results are recalculated after opening. Full result JSON is a different format. Invalid or oversized files do not change saved plans.
 
 ## NPI model
 

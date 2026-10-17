@@ -101,6 +101,12 @@ def create_app(*, state=None, public_origin=None):
                 return jsonify(model.explore(raw))
             if action == "jobs":
                 return jsonify(model.start(raw, owner=session["owner"])), 202
+            if action == 'sensitivity-jobs':
+                return jsonify(model.start_sensitivity(raw, owner=session['owner'])), 202
+            if action == 'plans/export':
+                return jsonify(model.export_plan(raw))
+            if action == 'plans/import':
+                return jsonify(model.import_plan(raw))
             if action.startswith("jobs/") and action.endswith("/cancel") and len(action.split("/")) == 3:
                 return jsonify(model.job(action.split("/")[1], cancel=True, owner=session["owner"]))
             return jsonify(error="Endpoint not found"), 404

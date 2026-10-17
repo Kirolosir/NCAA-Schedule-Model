@@ -76,6 +76,18 @@ class TestHostedApp(unittest.TestCase):
         self.assertEqual(self.post("/api/explore", raw).get_json(), self.state.explore(raw))
         self.assertEqual(self.post("/api/validate", {"samples": True}).status_code, 400)
 
+    def test_portable_plan_roundtrip_and_invalid_sensitivity_request(self):
+        exported = self.post('/api/plans/export', {'name': 'Coach plan', 'config': {}})
+        self.assertEqual(exported.status_code, 200)
+        file = exported.get_json()
+        self.assertEqual(file['format'], 'schedule-lab-plan')
+        imported = self.post('/api/plans/import', file)
+        self.assertEqual(imported.status_code, 200)
+        self.assertEqual(imported.get_json()['config'], file['config'])
+        self.assertTrue(imported.get_json()['data_matches'])
+        self.assertEqual(self.post('/api/plans/import', {**file, 'version': 2}).status_code, 400)
+        self.assertEqual(self.post('/api/sensitivity-jobs', {'config': {}, 'schedules': [['Unknown']]}).status_code, 400)
+
     def test_bad_payloads(self):
         for body, content_type, status in [("{}", "text/plain", 415), ("{bad", "application/json", 400),
                                             ('{"samples":NaN}', "application/json", 400),
